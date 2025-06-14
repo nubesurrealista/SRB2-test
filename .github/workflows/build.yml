@@ -32,10 +32,10 @@ jobs:
           export TERM=xterm
           srb2bld --help
 
-      - name: Construir AppImage de SRB2
+      - name: Construir AppImage de SRB2 (rama predeterminada)
         run: |
           export TERM=xterm
-          echo 1 | sudo srb2bld --appimage
+          printf "1\n\n" | sudo srb2bld --appimage
 
       - name: Buscar AppImage generado
         id: find-appimage

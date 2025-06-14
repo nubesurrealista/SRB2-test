@@ -1,4 +1,4 @@
-name: Build and Package SRB2 for Linux
+name: Build and Package SRB2 with Official Assets
 
 on:
   workflow_dispatch:
@@ -43,24 +43,23 @@ jobs:
           cd SRB2/build
           make -j$(nproc)
 
-      - name: Descargar assets oficiales de SRB2
+      - name: Descargar y extraer assets oficiales
         run: |
-          mkdir -p SRB2-assets
-          cd SRB2-assets
-          wget https://mb.srb2.org/addons/srb2-v22.2-linux.tar.gz -O srb2-assets.tar.gz
-          tar -xzf srb2-assets.tar.gz
-          # Mover los archivos principales de assets a la carpeta de artefactos
-          cp srb2.pk3 player.dta zones.dta patch.dta ../SRB2/build/bin/ || true
-          # (Opcional: music.dta si existe)
-          if [ -f music.dta ]; then cp music.dta ../SRB2/build/bin/; fi
+          wget https://github.com/STJr/SRB2/releases/download/SRB2_release_2.2.15/SRB2-v2215-Full.zip -O SRB2-Full.zip
+          unzip SRB2-Full.zip -d srb2-assets
 
-      - name: Empaquetar binario y assets
+      - name: Preparar paquete final (ejecutable + assets)
         run: |
-          cd SRB2/build/bin
-          tar -czf ../../../../srb2-linux-package.tar.gz *
+          mkdir package
+          # Copiar ejecutable compilado
+          cp SRB2/build/bin/srb2* package/
+          # Copiar assets necesarios (el principal es srb2.pk3, pero puedes agregar otros si lo deseas)
+          cp srb2-assets/srb2.pk3 package/
+          # Opcional: copiar otros archivos de datos si los deseas (ejemplo: srb2.srb, etc.)
+          ls package
 
-      - name: Subir artefacto final
+      - name: Empaquetar y subir artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: srb2-linux-package
-          path: srb2-linux-package.tar.gz
+          name: srb2-linux-with-assets
+          path: package/

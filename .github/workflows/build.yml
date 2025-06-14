@@ -35,7 +35,7 @@ jobs:
       - name: Construir AppImage de SRB2 (todo predeterminado)
         run: |
           export TERM=xterm
-          printf "1\n\n\n" | sudo srb2bld --appimage
+          printf "1\n\n\n" | srb2bld --appimage
 
       - name: Buscar AppImage generado
         id: find-appimage

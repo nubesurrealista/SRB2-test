@@ -1,81 +1,51 @@
-name: Build and Package SRB2 for Linux
+name: Build SRB2 with srb2bld
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-linux:
+  build-srb2:
     runs-on: ubuntu-latest
     steps:
       - name: Instalar dependencias
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            cmake \
-            libsdl2-dev \
-            libsdl2-mixer-dev \
-            libsdl2-net-dev \
-            libpng-dev \
-            libopenmpt-dev \
-            libfluidsynth-dev \
-            git \
-            zlib1g-dev \
-            libcurl4-openssl-dev \
-            ccache \
-            unzip \
-            wget
+            make git debianutils coreutils findutils file \
+            ncurses-bin curl gawk docker.io stow \
+            libfuse2 zlib1g patchelf libgdk-pixbuf2.0-bin \
+            flatpak flatpak-builder
 
-      - name: Clonar código fuente de SRB2
+      - name: Descargar e instalar srb2bld
         run: |
-          git clone --depth=1 https://github.com/STJr/SRB2.git SRB2
-          cd SRB2
-          git submodule update --init --recursive
+          git clone https://github.com/Bijman/srb2bld.git
+          cd srb2bld
+          sudo make install
 
-      - name: Configurar CMake (Release)
+      - name: Agregar usuario al grupo docker y habilitar servicio
         run: |
-          mkdir -p SRB2/build
-          cd SRB2/build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DSRB2_USE_CCACHE=ON
+          sudo usermod -aG docker $USER
+          sudo systemctl enable docker
+          sudo systemctl start docker
 
-      - name: Compilar SRB2
+      - name: Verificar instalación de srb2bld
         run: |
-          cd SRB2/build
-          make -j$(nproc)
+          srb2bld --help
 
-      - name: Listar todo lo generado tras build
+      - name: Construir AppImage de SRB2
         run: |
-          find SRB2/build
+          # Puedes cambiar --appimage por --install --user si prefieres instalación local
+          srb2bld --appimage
 
-      - name: Descargar y extraer todos los assets oficiales posibles
+      - name: Buscar AppImage generado
+        id: find-appimage
         run: |
-          wget https://github.com/STJr/SRB2/releases/download/SRB2_release_2.2.15/SRB2-v2215-Full.zip -O SRB2-Full.zip
-          unzip SRB2-Full.zip -d srb2-assets
-          # Listar los archivos extraídos
-          ls -lh srb2-assets
+          APPIMAGE_PATH=$(find $HOME -name "*.AppImage" | head -n1)
+          echo "APPIMAGE_PATH=$APPIMAGE_PATH" >> $GITHUB_ENV
+          echo "AppImage generado: $APPIMAGE_PATH"
 
-      - name: Buscar binario compilado de SRB2
-        id: find-bin
-        run: |
-          BIN_PATH=$(find SRB2/build -type f -executable -name "srb2*")
-          echo "BIN_PATH=$BIN_PATH" >> $GITHUB_ENV
-          echo "Binario encontrado: $BIN_PATH"
-
-      - name: Preparar paquete final (binario + todos los assets)
-        run: |
-          mkdir -p package
-          cp $BIN_PATH package/
-          # Copiar TODOS los archivos esenciales base (pk3, dta, srb, scripts, txt, etc)
-          cp srb2-assets/*.{pk3,dta,srb,sh,txt,ico,png,bat,so,dll,exe,cfg} package/ 2>/dev/null || true
-          # Copiar subcarpetas relevantes (por ejemplo, savegames o scripts si existen)
-          for d in music patch player zones; do
-            [ -d "srb2-assets/$d" ] && cp -r "srb2-assets/$d" package/;
-          done
-          echo "Contenido final del paquete:"
-          ls -lh package
-
-      - name: Empaquetar y subir artefacto
+      - name: Subir artefacto AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: srb2-linux-with-all-assets
-          path: package/
+          name: SRB2-AppImage
+          path: ${{ env.APPIMAGE_PATH }}

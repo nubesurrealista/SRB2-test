@@ -1,4 +1,4 @@
-name: Build and Package SRB2 with Official Assets
+name: Build and Package SRB2 for Linux
 
 on:
   workflow_dispatch:
@@ -46,16 +46,27 @@ jobs:
       - name: Descargar y extraer assets oficiales
         run: |
           wget https://github.com/STJr/SRB2/releases/download/SRB2_release_2.2.15/SRB2-v2215-Full.zip -O SRB2-Full.zip
-          unzip SRB2-Full.zip -d srb2-assets
+          unzip -j SRB2-Full.zip "srb2.pk3" -d assets/
+          # Si hay más archivos esenciales (assets base), extraerlos también:
+          unzip -j SRB2-Full.zip "zones.dta" -d assets/ || true
+          unzip -j SRB2-Full.zip "player.dta" -d assets/ || true
+          unzip -j SRB2-Full.zip "patch.dta" -d assets/ || true
+          unzip -j SRB2-Full.zip "music.dta" -d assets/ || true
+
+      - name: Buscar binario compilado
+        id: find-bin
+        run: |
+          BIN_PATH=$(find SRB2/build -type f -executable -name "srb2*")
+          echo "BIN_PATH=$BIN_PATH" >> $GITHUB_ENV
+          echo "Binario encontrado: $BIN_PATH"
 
       - name: Preparar paquete final (ejecutable + assets)
         run: |
           mkdir package
-          # Copiar ejecutable compilado
-          cp SRB2/build/bin/srb2* package/
-          # Copiar assets necesarios (el principal es srb2.pk3, pero puedes agregar otros si lo deseas)
-          cp srb2-assets/srb2.pk3 package/
-          # Opcional: copiar otros archivos de datos si los deseas (ejemplo: srb2.srb, etc.)
+          cp $BIN_PATH package/
+          cp assets/* package/
+          # Opcional: Incluir README, LICENSE, o scripts si se desea
+          echo "Contenido del paquete final:"
           ls package
 
       - name: Empaquetar y subir artefacto

@@ -1,4 +1,4 @@
-name: Build Sonic Robo Blast 2
+name: Build and Package SRB2 for Linux
 
 on:
   workflow_dispatch:
@@ -20,23 +20,47 @@ jobs:
             libopenmpt-dev \
             libfluidsynth-dev \
             git \
-            zlib1g-dev
+            zlib1g-dev \
+            libcurl4-openssl-dev \
+            ccache \
+            unzip \
+            wget
 
       - name: Clonar código fuente de SRB2
         run: |
-          git clone --depth=1 https://github.com/STJr/SRB2.git
+          git clone --depth=1 https://github.com/STJr/SRB2.git SRB2
           cd SRB2
           git submodule update --init --recursive
 
-      - name: Compilar SRB2
-        working-directory: SRB2
+      - name: Configurar CMake (Release)
         run: |
-          mkdir build && cd build
-          cmake ..
+          mkdir -p SRB2/build
+          cd SRB2/build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DSRB2_USE_CCACHE=ON
+
+      - name: Compilar SRB2
+        run: |
+          cd SRB2/build
           make -j$(nproc)
 
-      - name: Guardar binarios como artefacto
+      - name: Descargar assets oficiales de SRB2
+        run: |
+          mkdir -p SRB2-assets
+          cd SRB2-assets
+          wget https://mb.srb2.org/addons/srb2-v22.2-linux.tar.gz -O srb2-assets.tar.gz
+          tar -xzf srb2-assets.tar.gz
+          # Mover los archivos principales de assets a la carpeta de artefactos
+          cp srb2.pk3 player.dta zones.dta patch.dta ../SRB2/build/bin/ || true
+          # (Opcional: music.dta si existe)
+          if [ -f music.dta ]; then cp music.dta ../SRB2/build/bin/; fi
+
+      - name: Empaquetar binario y assets
+        run: |
+          cd SRB2/build/bin
+          tar -czf ../../../../srb2-linux-package.tar.gz *
+
+      - name: Subir artefacto final
         uses: actions/upload-artifact@v4
         with:
-          name: srb2-linux-build
-          path: SRB2/build/bin/
+          name: srb2-linux-package
+          path: srb2-linux-package.tar.gz

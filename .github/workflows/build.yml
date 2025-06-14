@@ -1,4 +1,4 @@
-name: Build SRB2 with srb2bld
+name: Build SRB2 AppImage
 
 on:
   workflow_dispatch:
@@ -6,6 +6,7 @@ on:
 jobs:
   build-srb2:
     runs-on: ubuntu-latest
+
     steps:
       - name: Instalar dependencias
         run: |
@@ -20,7 +21,7 @@ jobs:
         run: |
           docker version
 
-      - name: Descargar e instalar srb2bld
+      - name: Clonar e instalar srb2bld
         run: |
           git clone https://github.com/Bijman/srb2bld.git
           cd srb2bld
@@ -34,7 +35,7 @@ jobs:
       - name: Construir AppImage de SRB2
         run: |
           export TERM=xterm
-          sudo srb2bld --appimage
+          echo 1 | sudo srb2bld --appimage
 
       - name: Buscar AppImage generado
         id: find-appimage

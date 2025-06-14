@@ -12,9 +12,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             make git debianutils coreutils findutils file \
-            ncurses-bin curl gawk docker.io stow \
+            ncurses-bin curl gawk stow \
             libfuse2 zlib1g patchelf libgdk-pixbuf2.0-bin \
             flatpak flatpak-builder
+
+      - name: Verificar Docker
+        run: |
+          docker version
 
       - name: Descargar e instalar srb2bld
         run: |
@@ -22,19 +26,12 @@ jobs:
           cd srb2bld
           sudo make install
 
-      - name: Agregar usuario al grupo docker y habilitar servicio
-        run: |
-          sudo usermod -aG docker $USER
-          sudo systemctl enable docker
-          sudo systemctl start docker
-
       - name: Verificar instalación de srb2bld
         run: |
           srb2bld --help
 
       - name: Construir AppImage de SRB2
         run: |
-          # Puedes cambiar --appimage por --install --user si prefieres instalación local
           srb2bld --appimage
 
       - name: Buscar AppImage generado

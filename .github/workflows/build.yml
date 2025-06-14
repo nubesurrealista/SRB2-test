@@ -43,34 +43,39 @@ jobs:
           cd SRB2/build
           make -j$(nproc)
 
-      - name: Descargar y extraer assets oficiales
+      - name: Listar todo lo generado tras build
+        run: |
+          find SRB2/build
+
+      - name: Descargar y extraer todos los assets oficiales posibles
         run: |
           wget https://github.com/STJr/SRB2/releases/download/SRB2_release_2.2.15/SRB2-v2215-Full.zip -O SRB2-Full.zip
-          unzip -j SRB2-Full.zip "srb2.pk3" -d assets/
-          # Si hay más archivos esenciales (assets base), extraerlos también:
-          unzip -j SRB2-Full.zip "zones.dta" -d assets/ || true
-          unzip -j SRB2-Full.zip "player.dta" -d assets/ || true
-          unzip -j SRB2-Full.zip "patch.dta" -d assets/ || true
-          unzip -j SRB2-Full.zip "music.dta" -d assets/ || true
+          unzip SRB2-Full.zip -d srb2-assets
+          # Listar los archivos extraídos
+          ls -lh srb2-assets
 
-      - name: Buscar binario compilado
+      - name: Buscar binario compilado de SRB2
         id: find-bin
         run: |
           BIN_PATH=$(find SRB2/build -type f -executable -name "srb2*")
           echo "BIN_PATH=$BIN_PATH" >> $GITHUB_ENV
           echo "Binario encontrado: $BIN_PATH"
 
-      - name: Preparar paquete final (ejecutable + assets)
+      - name: Preparar paquete final (binario + todos los assets)
         run: |
-          mkdir package
+          mkdir -p package
           cp $BIN_PATH package/
-          cp assets/* package/
-          # Opcional: Incluir README, LICENSE, o scripts si se desea
-          echo "Contenido del paquete final:"
-          ls package
+          # Copiar TODOS los archivos esenciales base (pk3, dta, srb, scripts, txt, etc)
+          cp srb2-assets/*.{pk3,dta,srb,sh,txt,ico,png,bat,so,dll,exe,cfg} package/ 2>/dev/null || true
+          # Copiar subcarpetas relevantes (por ejemplo, savegames o scripts si existen)
+          for d in music patch player zones; do
+            [ -d "srb2-assets/$d" ] && cp -r "srb2-assets/$d" package/;
+          done
+          echo "Contenido final del paquete:"
+          ls -lh package
 
       - name: Empaquetar y subir artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: srb2-linux-with-assets
+          name: srb2-linux-with-all-assets
           path: package/

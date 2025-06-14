@@ -28,11 +28,13 @@ jobs:
 
       - name: Verificar instalación de srb2bld
         run: |
+          export TERM=xterm
           srb2bld --help
 
       - name: Construir AppImage de SRB2
         run: |
-          srb2bld --appimage
+          export TERM=xterm
+          sudo srb2bld --appimage
 
       - name: Buscar AppImage generado
         id: find-appimage

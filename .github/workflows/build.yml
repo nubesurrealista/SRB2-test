@@ -1,0 +1,42 @@
+name: Build Sonic Robo Blast 2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            libsdl2-dev \
+            libsdl2-mixer-dev \
+            libsdl2-net-dev \
+            libpng-dev \
+            libopenmpt-dev \
+            libfluidsynth-dev \
+            git \
+            zlib1g-dev
+
+      - name: Clonar código fuente de SRB2
+        run: |
+          git clone --depth=1 https://github.com/STJr/SRB2.git
+          cd SRB2
+          git submodule update --init --recursive
+
+      - name: Compilar SRB2
+        working-directory: SRB2
+        run: |
+          mkdir build && cd build
+          cmake ..
+          make -j$(nproc)
+
+      - name: Guardar binarios como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: srb2-linux-build
+          path: SRB2/build/bin/

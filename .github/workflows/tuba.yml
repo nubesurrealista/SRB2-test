@@ -1,18 +1,3 @@
-name: Build Tuba AppImage (Arch, sin linuxdeploy)
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout source
-      uses: actions/checkout@v4
-
     - name: Build AppDir in Arch Linux Docker
       run: |
         set -euxo pipefail
@@ -41,6 +26,7 @@ jobs:
           echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
+          # echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop  # <--- QUITA ESTA LINEA
           echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
@@ -51,27 +37,3 @@ jobs:
           echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
           chmod +x AppDir/AppRun
         "
-
-    - name: Install FUSE for AppImage
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libfuse2
-
-    - name: Download appimagetool
-      run: |
-        wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-        chmod +x appimagetool
-
-    - name: Ensure no .DirIcon before AppImage build
-      run: |
-        rm -f AppDir/.DirIcon
-
-    - name: Build AppImage on host
-      run: |
-        ./appimagetool AppDir
-
-    - name: Upload AppImage
-      uses: actions/upload-artifact@v4
-      with:
-        name: tuba-appimage
-        path: ./*.AppImage

@@ -41,14 +41,9 @@ jobs:
           echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
-          echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
           echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
-
-          if [ ! -f AppDir/dev.geopjr.Tuba.svg ]; then
-            echo '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\"><rect width=\"100%\" height=\"100%\" fill=\"#666\"/><text x=\"50%\" y=\"50%\" font-size=\"24\" text-anchor=\"middle\" fill=\"#fff\" dy=\".3em\">T</text></svg>' > AppDir/dev.geopjr.Tuba.svg
-          fi
 
           echo '#!/bin/sh' > AppDir/AppRun
           echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
@@ -66,6 +61,10 @@ jobs:
       run: |
         wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
         chmod +x appimagetool
+
+    - name: Ensure no .DirIcon before AppImage build
+      run: |
+        rm -f AppDir/.DirIcon
 
     - name: Build AppImage on host
       run: |

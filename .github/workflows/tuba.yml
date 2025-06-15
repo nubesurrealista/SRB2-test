@@ -23,7 +23,6 @@ jobs:
               json-glib glib2 libxml2 gobject-introspection wget patchelf \
               hicolor-icon-theme desktop-file-utils libgee librsvg
 
-            # Construcción de Tuba
             git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
             cd tuba-src
             meson setup build
@@ -33,10 +32,8 @@ jobs:
 
             mkdir -p AppDir/usr/lib AppDir/usr/bin
 
-            EXEC=tuba
-
             # Copiar dependencias necesarias
-            ldd AppDir/usr/bin/$EXEC | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
+            ldd AppDir/usr/bin/tuba | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
               [ -f \"$lib\" ] && cp -n \"$lib\" AppDir/usr/lib/ || true
             done
 
@@ -60,11 +57,11 @@ jobs:
             echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
 
-            # Crear AppRun
+            # Crear AppRun (¡sin variables no definidas!)
             echo '#!/bin/sh' > AppDir/AppRun
             echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
             echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
-            echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
+            echo 'exec \"\$HERE/usr/bin/tuba\" \"\$@\"' >> AppDir/AppRun
             chmod +x AppDir/AppRun
 
             # Debug archivos críticos

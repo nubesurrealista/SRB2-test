@@ -17,7 +17,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git python3 python3-pip python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+            python3 python3-pip python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
             desktop-file-utils wget
 
       - name: Clone Trackma
@@ -28,42 +28,56 @@ jobs:
           pip3 install --upgrade pip
           pip3 install "git+https://github.com/z411/trackma.git#egg=Trackma[gtk,trackers]"
 
-      - name: Download linuxdeploy and plugin
+      - name: Install python-appimage
         run: |
-          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
-          wget -c https://github.com/linuxdeploy/linuxdeploy-plugin-python/releases/download/continuous/linuxdeploy-plugin-python-x86_64.AppImage
-          chmod +x linuxdeploy-plugin-python-x86_64.AppImage
+          pip3 install --upgrade python-appimage
 
-      - name: Prepare AppDir
+      - name: Find trackma-gtk executable and desktop/icon files
+        id: locate_files
         run: |
-          mkdir -p AppDir/usr/bin
-          which trackma-gtk
-          cp "$(which trackma-gtk)" AppDir/usr/bin/trackma-gtk
-          chmod +x AppDir/usr/bin/trackma-gtk
-          # Copia icono/desktop si existen
+          TRACKMA_GTK_PATH=$(which trackma-gtk)
+          if [ -z "$TRACKMA_GTK_PATH" ]; then
+            echo "trackma-gtk not found!" >&2
+            exit 1
+          fi
+          echo "trackma_gtk_path=$TRACKMA_GTK_PATH" >> $GITHUB_OUTPUT
+          # Busca archivo desktop
           if [ -f /usr/share/applications/trackma-gtk.desktop ]; then
-            mkdir -p AppDir/usr/share/applications
-            cp /usr/share/applications/trackma-gtk.desktop AppDir/usr/share/applications/
+            echo "desktop_file=/usr/share/applications/trackma-gtk.desktop" >> $GITHUB_OUTPUT
+          elif [ -f ./trackma/data/trackma-gtk.desktop ]; then
+            echo "desktop_file=./trackma/data/trackma-gtk.desktop" >> $GITHUB_OUTPUT
+          else
+            echo "desktop_file=" >> $GITHUB_OUTPUT
           fi
+          # Busca icono
           if [ -f /usr/share/icons/hicolor/128x128/apps/trackma.png ]; then
-            mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
-            cp /usr/share/icons/hicolor/128x128/apps/trackma.png AppDir/usr/share/icons/hicolor/128x128/apps/
+            echo "icon_file=/usr/share/icons/hicolor/128x128/apps/trackma.png" >> $GITHUB_OUTPUT
+          elif [ -f ./trackma/data/trackma.png ]; then
+            echo "icon_file=./trackma/data/trackma.png" >> $GITHUB_OUTPUT
+          else
+            echo "icon_file=" >> $GITHUB_OUTPUT
           fi
 
-      - name: Bundle and build AppImage
+      - name: Build AppImage with python-appimage
         run: |
-          export VERSION=git
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --desktop-file AppDir/usr/share/applications/trackma-gtk.desktop \
-            --icon-file AppDir/usr/share/icons/hicolor/128x128/apps/trackma.png \
-            --plugin python \
-            --output appimage
+          set -e
+          export PYAPP_EXECUTABLE="${{ steps.locate_files.outputs.trackma_gtk_path }}"
+          export PYAPP_DESKTOP="${{ steps.locate_files.outputs.desktop_file }}"
+          export PYAPP_ICON="${{ steps.locate_files.outputs.icon_file }}"
+          CMD="python3 -m appimage build \"$PYAPP_EXECUTABLE\" --name trackma-gtk"
+          if [ -n "$PYAPP_DESKTOP" ]; then
+            CMD="$CMD --desktop \"$PYAPP_DESKTOP\""
+          fi
+          if [ -n "$PYAPP_ICON" ]; then
+            CMD="$CMD --icon \"$PYAPP_ICON\""
+          fi
+          CMD="$CMD --output Trackma-gtk-x86_64.AppImage"
+          echo "Running: $CMD"
+          eval $CMD
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: trackma-gtk-AppImage
-          path: '*.AppImage'
+          path: 'Trackma-gtk-x86_64.AppImage'
           if-no-files-found: error

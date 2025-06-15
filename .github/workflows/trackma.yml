@@ -52,8 +52,8 @@ jobs:
               exec_args: ""
             runtime:
               path_mappings:
-                - /usr/lib/: usr/lib/
-                - /usr/share/: usr/share/
+                - "/usr/lib/:usr/lib/"
+                - "/usr/share/:usr/share/"
             files:
               include:
                 - /usr/lib/x86_64-linux-gnu/libgdk-3.so.*

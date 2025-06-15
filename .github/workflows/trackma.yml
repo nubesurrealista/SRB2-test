@@ -31,8 +31,10 @@ jobs:
           pip3 install --upgrade pip
           pip3 install "git+https://github.com/z411/trackma.git#egg=Trackma[gtk,trackers]"
 
-      - name: Install appimage-builder
-        run: pip3 install appimage-builder
+      - name: Install appimage-builder from GitHub
+        run: |
+          pip3 install --upgrade pip
+          pip3 install git+https://github.com/AppImageCrafters/appimage-builder.git
 
       - name: Ensure AppImageBuilder recipe is present
         working-directory: ./trackma

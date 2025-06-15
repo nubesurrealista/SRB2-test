@@ -31,11 +31,15 @@ jobs:
             DESTDIR=/workspace/Tuba.AppDir meson install -C build
             cd /workspace
 
-            # Copiar dependencias compartidas necesarias 
+            # Copiar solo dependencias compartidas necesarias, excluyendo glibc y similares
             mkdir -p Tuba.AppDir/usr/lib
             BIN=/workspace/Tuba.AppDir/usr/local/bin/dev.geopjr.Tuba
             ldd "$BIN" | awk '"'"'{if ($3 ~ /^\//) print $3}'"'"' | while read -r lib; do
-              cp -n "$lib" /workspace/Tuba.AppDir/usr/lib/ || true
+              # Excluir las bibliotecas críticas del sistema (glibc, etc.)
+              case "$lib" in
+                /lib*|/usr/lib/libc.so.*|/usr/lib/libpthread.so.*|/usr/lib/ld-linux*|/usr/lib/libm.so.*|/usr/lib/libdl.so.*) ;;
+                *) cp -n "$lib" /workspace/Tuba.AppDir/usr/lib/ || true ;;
+              esac
             done
 
             cd Tuba.AppDir

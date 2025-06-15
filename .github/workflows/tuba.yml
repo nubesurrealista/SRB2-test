@@ -1,3 +1,18 @@
+name: Build Tuba AppImage (Arch, sin linuxdeploy)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+
     - name: Build and package AppImage in Arch Linux Docker
       run: |
         set -euxo pipefail
@@ -44,6 +59,12 @@
 
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
-          ./appimagetool AppDir || ./appimagetool --appimage-extract-and-run AppDir
+          ./appimagetool AppDir
           mv ./*.AppImage /workspace/
         "
+
+    - name: Upload AppImage
+      uses: actions/upload-artifact@v4
+      with:
+        name: tuba-appimage
+        path: ./*.AppImage

@@ -16,6 +16,7 @@ jobs:
     - name: Build and package AppImage in Arch Linux Docker
       run: |
         set -euxo pipefail
+
         docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git meson ninja vala \
@@ -37,29 +38,28 @@ jobs:
             [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
           done
 
-          echo '[Desktop Entry]
-Type=Application
-Name=Tuba
-Exec=tuba
-Icon=dev.geopjr.Tuba
-Categories=Network;
-Comment=Browse the Fediverse
-Terminal=false' > AppDir/dev.geopjr.Tuba.desktop
+          echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
+          echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
+          echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
+          echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
+          echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop
+          echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
+          echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
+          echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
 
           if [ ! -f AppDir/dev.geopjr.Tuba.svg ]; then
             echo '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\"><rect width=\"100%\" height=\"100%\" fill=\"#666\"/><text x=\"50%\" y=\"50%\" font-size=\"24\" text-anchor=\"middle\" fill=\"#fff\" dy=\".3em\">T</text></svg>' > AppDir/dev.geopjr.Tuba.svg
           fi
 
-          echo '#!/bin/sh
-HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"
-export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
-exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' > AppDir/AppRun
+          echo '#!/bin/sh' > AppDir/AppRun
+          echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
+          echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
+          echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
           chmod +x AppDir/AppRun
 
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           ./appimagetool AppDir
-
           mv ./*.AppImage /workspace/
         "
 

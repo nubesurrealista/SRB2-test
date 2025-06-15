@@ -70,11 +70,6 @@ jobs:
                 - /usr/lib/x86_64-linux-gnu/girepository-1.0
                 - /usr/share/icons/hicolor/128x128/apps/trackma.png
                 - /usr/share/applications/trackma-gtk.desktop
-            python:
-              packages:
-                - Trackma[gtk,trackers]
-              extra_pip_args: ["--upgrade"]
-              interpreter: python3
 
           AppImage:
             arch: x86_64

@@ -13,7 +13,22 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install GTK4 >= 4.17.5 from source
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential git meson ninja-build \
+          libglib2.0-dev libepoxy-dev libjpeg-dev libpng-dev libcairo2-dev \
+          libpango1.0-dev libatk1.0-dev libgdk-pixbuf2.0-dev libwayland-dev \
+          wayland-protocols libxkbcommon-dev libcolord-dev liblcms2-dev \
+          libvulkan-dev python3-pip python3-mako
+        git clone --depth=1 --branch 4.18.2 https://gitlab.gnome.org/GNOME/gtk.git
+        cd gtk
+        meson setup build
+        meson compile -C build
+        sudo meson install -C build
+        cd ..
+
+    - name: Install other dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \

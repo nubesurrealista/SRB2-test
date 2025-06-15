@@ -39,8 +39,17 @@ jobs:
         working-directory: ./trackma
         run: |
           mkdir -p AppDir/usr/bin
-          # Copia el ejecutable principal
-          which trackma-gtk && cp "$(which trackma-gtk)" AppDir/usr/bin/ || true
+          # Copia el script Python real, asegúrate que sea ejecutable
+          TRACKMA_BIN="$(which trackma-gtk)"
+          cp "$TRACKMA_BIN" AppDir/usr/bin/trackma-gtk.py
+          chmod +x AppDir/usr/bin/trackma-gtk.py
+          # Crea AppRun launcher
+          cat > AppDir/AppRun << 'EOL'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/python3" "$HERE/usr/bin/trackma-gtk.py" "$@"
+          EOL
+          chmod +x AppDir/AppRun
           # Copia el ícono si existe
           if [ -f /usr/share/icons/hicolor/128x128/apps/trackma.png ]; then
             mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
@@ -65,7 +74,7 @@ jobs:
               name: Trackma GTK
               icon: trackma
               version: "git"
-              exec: usr/bin/trackma-gtk
+              exec: AppRun
               exec_args: ""
             runtime:
               path_mappings:

@@ -57,6 +57,11 @@ jobs:
           chmod +x AppDir/AppRun
         "
 
+    - name: Install FUSE for AppImage
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libfuse2
+
     - name: Download appimagetool
       run: |
         wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage

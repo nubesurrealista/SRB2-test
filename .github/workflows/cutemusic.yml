@@ -8,14 +8,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Dependencias de sistema para ATL y build tools
+      # 1. Dependencias de sistema (corregido, incluye libbsd-dev)
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y git build-essential meson ninja-build pkg-config \
             libasound2-dev libavcodec-dev libcap-dev libdrm-dev libglib2.0-dev libgtk-4-dev \
             libgudev-1.0-dev libopenxr-dev libportal-dev libsqlite3-dev libwebkitgtk-6.0-dev \
-            autoconf libtool unzip wget openjdk-17-jdk
+            autoconf libtool unzip wget openjdk-17-jdk libbsd-dev
 
       # 2. wolfSSL
       - name: Build and install wolfSSL
@@ -52,7 +52,7 @@ jobs:
           sudo make ____LIBDIR=lib install
           cd ..
 
-      # 5. libopensles-standalone (opcional, muchos APK lo requieren)
+      # 5. libopensles-standalone (opcional, recomendado)
       - name: Build and install libopensles-standalone
         run: |
           git clone https://gitlab.com/android_translation_layer/libopensles-standalone.git

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (no source code)
+      - name: Checkout source code
         uses: actions/checkout@v4
 
       - name: Install system dependencies
@@ -35,7 +35,24 @@ jobs:
           pip3 install --upgrade pip
           pip3 install git+https://github.com/AppImageCrafters/appimage-builder.git
 
-      - name: Write minimal AppImageBuilder.yml
+      - name: Prepare AppDir and desktop integration
+        working-directory: ./trackma
+        run: |
+          mkdir -p AppDir/usr/bin
+          # Copia el ejecutable principal
+          which trackma-gtk && cp "$(which trackma-gtk)" AppDir/usr/bin/ || true
+          # Copia el ícono si existe (ajusta el path si es necesario)
+          if [ -f /usr/share/icons/hicolor/128x128/apps/trackma.png ]; then
+            mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
+            cp /usr/share/icons/hicolor/128x128/apps/trackma.png AppDir/usr/share/icons/hicolor/128x128/apps/
+          fi
+          # Copia el archivo desktop si existe (ajusta el path si es necesario)
+          if [ -f /usr/share/applications/trackma-gtk.desktop ]; then
+            mkdir -p AppDir/usr/share/applications
+            cp /usr/share/applications/trackma-gtk.desktop AppDir/usr/share/applications/
+          fi
+
+      - name: Write AppImageBuilder.yml
         working-directory: ./trackma
         run: |
           cat > AppImageBuilder.yml << 'EOF'
@@ -72,6 +89,7 @@ jobs:
                 - /usr/share/applications/trackma-gtk.desktop
 
           AppImage:
+            comp: appimage
             arch: x86_64
             update-information: "gh-releases-zsync|z411|trackma|latest|Trackma-gtk*.AppImage.zsync"
           EOF

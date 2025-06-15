@@ -14,7 +14,10 @@ jobs:
           sudo apt-get install -y git build-essential meson ninja-build pkg-config \
             libasound2-dev libavcodec-dev libcap-dev libdrm-dev libglib2.0-dev libgtk-4-dev \
             libgudev-1.0-dev libopenxr-dev libportal-dev libsqlite3-dev libwebkitgtk-6.0-dev \
-            autoconf libtool unzip wget openjdk-17-jdk libbsd-dev libunwind-dev
+            autoconf libtool unzip wget openjdk-17-jdk libbsd-dev libunwind-dev libelf-dev \
+            zlib1g-dev libssl-dev libcurl4-openssl-dev libxml2-dev python3-pip \
+            libx11-dev libxext-dev libxi-dev libxtst-dev libxrender-dev \
+            cmake g++ default-jdk-headless
 
       - name: Build and install wolfSSL
         run: |

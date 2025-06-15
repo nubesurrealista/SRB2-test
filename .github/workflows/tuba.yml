@@ -16,7 +16,8 @@ jobs:
     - name: Build and package AppImage in Arch Linux Docker
       run: |
         set -euxo pipefail
-        docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c '
+
+        docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git meson ninja vala \
             gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
@@ -33,33 +34,27 @@ jobs:
           mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
           EXEC=tuba
 
-          ldd AppDir/usr/bin/$EXEC | awk "{if (\$3 ~ /^\//) print \$3}" | while read -r lib; do
-            [ -f "$lib" ] && cp -n "$lib" AppDir/usr/lib/ || true
+          ldd AppDir/usr/bin/\$EXEC | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
+            [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
           done
 
-          cat > AppDir/dev.geopjr.Tuba.desktop <<EOF
-[Desktop Entry]
+          echo '[Desktop Entry]
 Type=Application
 Name=Tuba
 Exec=tuba
 Icon=dev.geopjr.Tuba
 Categories=Network;
 Comment=Browse the Fediverse
-Terminal=false
-EOF
+Terminal=false' > AppDir/dev.geopjr.Tuba.desktop
 
           if [ ! -f AppDir/dev.geopjr.Tuba.svg ]; then
-            cat > AppDir/dev.geopjr.Tuba.svg <<EOI
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="#666"/><text x="50%" y="50%" font-size="24" text-anchor="middle" fill="#fff" dy=".3em">T</text></svg>
-EOI
+            echo '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\"><rect width=\"100%\" height=\"100%\" fill=\"#666\"/><text x=\"50%\" y=\"50%\" font-size=\"24\" text-anchor=\"middle\" fill=\"#fff\" dy=\".3em\">T</text></svg>' > AppDir/dev.geopjr.Tuba.svg
           fi
 
-          cat > AppDir/AppRun <<EOA
-#!/bin/sh
-HERE="\$(dirname "\$(readlink -f "\$0")")"
-export LD_LIBRARY_PATH="\$HERE/usr/lib:\$LD_LIBRARY_PATH"
-exec "\$HERE/usr/bin/$EXEC" "\$@"
-EOA
+          echo '#!/bin/sh
+HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"
+export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
+exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' > AppDir/AppRun
           chmod +x AppDir/AppRun
 
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
@@ -67,7 +62,7 @@ EOA
           ./appimagetool AppDir
 
           mv ./*.AppImage /workspace/
-        '
+        "
 
     - name: Upload AppImage
       uses: actions/upload-artifact@v4

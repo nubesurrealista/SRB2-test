@@ -16,7 +16,7 @@ jobs:
     - name: Build and package AppImage in Arch Linux Docker
       run: |
         set -euxo pipefail
-        docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -c '
+        docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -euc '
           # 1. Instala dependencias necesarias
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git meson ninja vala \
@@ -36,22 +36,22 @@ jobs:
           mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
           EXEC=tuba
 
-          # 4. Copia dependencias requeridas (sólo rutas absolutas)
-          ldd AppDir/usr/bin/$EXEC | awk '\''{if ($3 ~ /^\//) print $3}'\'' | while read lib; do
+          # 4. Copia dependencias requeridas (solo rutas absolutas)
+          ldd AppDir/usr/bin/$EXEC | awk '\''{if ($3 ~ /^\//) print $3}'\'' | while read -r lib; do
             [ -f "$lib" ] && cp -n "$lib" AppDir/usr/lib/ || true
           done
 
           # 5. Crea el archivo .desktop mínimo
           cat > AppDir/dev.geopjr.Tuba.desktop <<EOF
-          [Desktop Entry]
-          Type=Application
-          Name=Tuba
-          Exec=tuba
-          Icon=dev.geopjr.Tuba
-          Categories=Network;
-          Comment=Browse the Fediverse
-          Terminal=false
-          EOF
+[Desktop Entry]
+Type=Application
+Name=Tuba
+Exec=tuba
+Icon=dev.geopjr.Tuba
+Categories=Network;
+Comment=Browse the Fediverse
+Terminal=false
+EOF
 
           # 6. Crea un icono SVG dummy si no existe
           if [ ! -f AppDir/dev.geopjr.Tuba.svg ]; then
@@ -62,24 +62,14 @@ EOI
 
           # 7. Crea AppRun
           cat > AppDir/AppRun <<EOA
-          #!/bin/sh
-          HERE="\$(dirname "\$(readlink -f "\$0")")"
-          export LD_LIBRARY_PATH="\$HERE/usr/lib:\$LD_LIBRARY_PATH"
-          exec "\$HERE/usr/bin/$EXEC" "\$@"
-          EOA
+#!/bin/sh
+HERE="\$(dirname "\$(readlink -f "\$0")")"
+export LD_LIBRARY_PATH="\$HERE/usr/lib:\$LD_LIBRARY_PATH"
+exec "\$HERE/usr/bin/$EXEC" "\$@"
+EOA
           chmod +x AppDir/AppRun
 
           # 8. Descarga y ejecuta appimagetool para crear el AppImage
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool
-          ./appimagetool AppDir
-
-          # 9. Mueve el resultado al workspace
-          mv *.AppImage /workspace/
-        '
-
-    - name: Upload AppImage
-      uses: actions/upload-artifact@v4
-      with:
-        name: tuba-appimage
-        path: ./*.AppImage
+          chmod +](#)
+

@@ -34,11 +34,10 @@ jobs:
 
           # 3. Prepara AppDir
           mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
-          # Ajusta si el binario no se llama tuba
           EXEC=tuba
 
-          # 4. Copia dependencias requeridas (exceptuando las del sistema base)
-          ldd AppDir/usr/bin/$EXEC | awk \'{ print $3 }\' | grep -vE "^/usr/(lib|lib32|lib64|libx32|libexec|bin)/ld-linux" | while read lib; do
+          # 4. Copia dependencias requeridas (sólo rutas absolutas)
+          ldd AppDir/usr/bin/$EXEC | awk '\''{if ($3 ~ /^\//) print $3}'\'' | while read lib; do
             [ -f "$lib" ] && cp -n "$lib" AppDir/usr/lib/ || true
           done
 
@@ -54,11 +53,11 @@ jobs:
           Terminal=false
           EOF
 
-          # 6. Crea un icono dummy si no existe (puedes reemplazarlo por uno real si lo tienes)
+          # 6. Crea un icono SVG dummy si no existe
           if [ ! -f AppDir/dev.geopjr.Tuba.svg ]; then
             cat > AppDir/dev.geopjr.Tuba.svg <<EOI
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="#666"/><text x="50%" y="50%" font-size="24" text-anchor="middle" fill="#fff" dy=".3em">T</text></svg>
-            EOI
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="#666"/><text x="50%" y="50%" font-size="24" text-anchor="middle" fill="#fff" dy=".3em">T</text></svg>
+EOI
           fi
 
           # 7. Crea AppRun

@@ -41,12 +41,12 @@ jobs:
           mkdir -p AppDir/usr/bin
           # Copia el ejecutable principal
           which trackma-gtk && cp "$(which trackma-gtk)" AppDir/usr/bin/ || true
-          # Copia el ícono si existe (ajusta el path si es necesario)
+          # Copia el ícono si existe
           if [ -f /usr/share/icons/hicolor/128x128/apps/trackma.png ]; then
             mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
             cp /usr/share/icons/hicolor/128x128/apps/trackma.png AppDir/usr/share/icons/hicolor/128x128/apps/
           fi
-          # Copia el archivo desktop si existe (ajusta el path si es necesario)
+          # Copia el archivo desktop si existe
           if [ -f /usr/share/applications/trackma-gtk.desktop ]; then
             mkdir -p AppDir/usr/share/applications
             cp /usr/share/applications/trackma-gtk.desktop AppDir/usr/share/applications/
@@ -73,6 +73,8 @@ jobs:
                 - "/usr/share/:usr/share/"
             files:
               include:
+                - /usr/bin/python3
+                - /usr/lib/python3*
                 - /usr/lib/x86_64-linux-gnu/libgdk-3.so.*
                 - /usr/lib/x86_64-linux-gnu/libgtk-3.so.*
                 - /usr/lib/x86_64-linux-gnu/libcairo.so.*

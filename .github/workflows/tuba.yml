@@ -1,18 +1,3 @@
-name: Build Tuba AppImage (Arch, sin linuxdeploy)
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout source
-      uses: actions/checkout@v4
-
     - name: Build and package AppImage in Arch Linux Docker
       run: |
         set -euxo pipefail
@@ -22,7 +7,7 @@ jobs:
           pacman -S --noconfirm base-devel git meson ninja vala \
             gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
             json-glib glib2 libxml2 gobject-introspection wget patchelf \
-            hicolor-icon-theme desktop-file-utils
+            hicolor-icon-theme desktop-file-utils libgee fuse2
 
           git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
           cd tuba-src
@@ -59,12 +44,6 @@ jobs:
 
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
-          ./appimagetool AppDir
+          ./appimagetool AppDir || ./appimagetool --appimage-extract-and-run AppDir
           mv ./*.AppImage /workspace/
         "
-
-    - name: Upload AppImage
-      uses: actions/upload-artifact@v4
-      with:
-        name: tuba-appimage
-        path: ./*.AppImage

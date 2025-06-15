@@ -1,4 +1,4 @@
-name: Build Tuba Client
+name: Build Tuba AppImage on Arch
 
 on:
   workflow_dispatch:
@@ -13,55 +13,35 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v4
 
-    - name: Install GTK4 >= 4.17.5 from source
+    - name: Build in Arch Linux Docker container
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential git meson ninja-build \
-          libglib2.0-dev libepoxy-dev libjpeg-dev libpng-dev libcairo2-dev \
-          libpango1.0-dev libatk1.0-dev libgdk-pixbuf2.0-dev libwayland-dev \
-          wayland-protocols libxkbcommon-dev libcolord-dev liblcms2-dev \
-          libvulkan-dev python3-pip python3-mako
-        git clone --depth=1 --branch 4.18.2 https://gitlab.gnome.org/GNOME/gtk.git
-        cd gtk
-        meson setup build
-        meson compile -C build
-        sudo meson install -C build
-        cd ..
+        docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest /bin/bash -c "
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git meson ninja wget patchelf \
+            gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
+            json-glib glib2 libxml2 gobject-introspection make
 
-    - name: Install other dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          meson \
-          valac \
-          libjson-glib-dev \
-          libxml2-dev \
-          libgee-0.8-dev \
-          libsoup-3.0-dev \
-          libadwaita-1-dev \
-          libsecret-1-dev \
-          libgtksourceview-5-dev \
-          libicu-dev \
-          git \
-          make
+          # Descarga linuxdeploy y el plugin gtk
+          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          wget -c https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk.sh
+          chmod +x linuxdeploy-plugin-gtk.sh
 
-    - name: Clone Tuba (latest release)
-      run: |
-        git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
+          # Clona Tuba y construye
+          git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
+          cd tuba-src
+          meson setup build
+          meson compile -C build
+          DESTDIR=/workspace/AppDir meson install -C build
 
-    - name: Build Tuba
-      working-directory: ./tuba-src
-      run: |
-        meson setup build
-        meson compile -C build
+          # Empaqueta la AppImage
+          cd /workspace
+          export APPDIR=/workspace/AppDir
+          ./linuxdeploy-x86_64.AppImage --appdir \$APPDIR --output appimage --plugin gtk
+        "
 
-    - name: Package build artifacts
-      working-directory: ./tuba-src/build
-      run: |
-        tar czf ../../tuba-build.tar.gz .
-
-    - name: Upload build artifact
+    - name: Upload AppImage
       uses: actions/upload-artifact@v4
       with:
-        name: tuba-build
-        path: tuba-build.tar.gz
+        name: tuba-appimage
+        path: ./*.AppImage

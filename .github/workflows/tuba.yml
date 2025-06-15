@@ -13,7 +13,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build AppDir in Arch Linux Docker
+      - name: Build AppDir in Arch Linux Docker (con icono generado)
         run: |
           set -euxo pipefail
           docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
@@ -21,7 +21,7 @@ jobs:
             pacman -S --noconfirm base-devel git meson ninja vala \
               gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
               json-glib glib2 libxml2 gobject-introspection wget patchelf \
-              hicolor-icon-theme desktop-file-utils libgee
+              hicolor-icon-theme desktop-file-utils libgee imagemagick
 
             git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
             cd tuba-src
@@ -31,17 +31,22 @@ jobs:
             cd /workspace
 
             mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
+
             EXEC=tuba
 
             ldd AppDir/usr/bin/\$EXEC | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
               [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
             done
 
-            # Archivo .desktop mínimo, sin Icon para evitar errores
+            # Generar un icono PNG negro de 256x256
+            convert -size 256x256 xc:black AppDir/dev.geopjr.Tuba.png
+
+            # Archivo .desktop con campo Icon correcto
             echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
             echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
@@ -66,6 +71,11 @@ jobs:
       - name: Eliminar .DirIcon antes de empaquetar (por precaución)
         run: |
           rm -f AppDir/.DirIcon
+
+      - name: Debug .desktop y icono
+        run: |
+          cat AppDir/dev.geopjr.Tuba.desktop
+          file AppDir/dev.geopjr.Tuba.png
 
       - name: Construir AppImage
         run: |

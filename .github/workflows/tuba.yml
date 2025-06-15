@@ -1,4 +1,4 @@
-name: Build Tuba AppImage on Arch
+name: Build AppImage in Arch Linux (Manual, sin linuxdeploy)
 
 on:
   workflow_dispatch:
@@ -13,32 +13,59 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v4
 
-    - name: Build in Arch Linux Docker container
+    - name: Build and package AppImage in Arch Linux Docker
       run: |
-        docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest /bin/bash -c "
+        docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -euxc '
+          # 1. Instala dependencias necesarias
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git meson ninja wget patchelf \
+          pacman -S --noconfirm base-devel git meson ninja vala \
             gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
-            json-glib glib2 libxml2 gobject-introspection make
+            json-glib glib2 libxml2 gobject-introspection wget patchelf \
+            hicolor-icon-theme desktop-file-utils
 
-          # Descarga linuxdeploy y el plugin gtk
-          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
-          wget -c https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk.sh
-          chmod +x linuxdeploy-plugin-gtk.sh
-
-          # Clona Tuba y construye
+          # 2. Compila la app
           git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
           cd tuba-src
           meson setup build
           meson compile -C build
           DESTDIR=/workspace/AppDir meson install -C build
-
-          # Empaqueta la AppImage
           cd /workspace
-          export APPDIR=/workspace/AppDir
-          ./linuxdeploy-x86_64.AppImage --appdir \$APPDIR --output appimage --plugin gtk
-        "
+
+          # 3. Prepara AppDir
+          mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
+          cp -r /workspace/AppDir/usr/* AppDir/usr/
+          # Si tu binario no está en AppDir/usr/bin/tuba, ajusta el nombre aquí
+          EXEC=tuba
+
+          # 4. Copia dependencias requeridas
+          # Extrae las librerías necesarias (exceptuando las del sistema base)
+          mkdir -p AppDir/usr/lib
+          ldd AppDir/usr/bin/$EXEC | awk \'{ print $3 }\' | grep -vE "^/usr/(lib|lib32|lib64|libx32|libexec|bin)/ld-linux" | while read lib; do
+            [ -f "$lib" ] && cp -n "$lib" AppDir/usr/lib/ || true
+          done
+
+          # 5. Incluye iconos y desktop file
+          # Ajusta estos nombres si tu proyecto los genera diferente
+          cp tuba-src/data/dev.geopjr.Tuba.desktop AppDir/
+          cp tuba-src/data/dev.geopjr.Tuba.svg AppDir/
+
+          # 6. Crea AppRun
+          cat > AppDir/AppRun <<EOF
+          #!/bin/sh
+          HERE="\$(dirname "\$(readlink -f "\$0")")"
+          export LD_LIBRARY_PATH="\$HERE/usr/lib:\$LD_LIBRARY_PATH"
+          exec "\$HERE/usr/bin/$EXEC" "\$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          # 7. Descarga y ejecuta appimagetool para crear el AppImage
+          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          ./appimagetool AppDir
+
+          # 8. Mueve el resultado al workspace
+          mv *.AppImage /workspace/
+        '
 
     - name: Upload AppImage
       uses: actions/upload-artifact@v4

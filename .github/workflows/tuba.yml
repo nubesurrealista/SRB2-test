@@ -16,7 +16,6 @@ jobs:
     - name: Build and package AppImage in Arch Linux Docker
       run: |
         set -euxo pipefail
-
         docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git meson ninja vala \

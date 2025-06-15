@@ -13,7 +13,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build AppDir in Arch Linux Docker (con icono generado)
+      - name: Build AppDir in Arch Linux Docker
         run: |
           set -euxo pipefail
           docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
@@ -21,7 +21,7 @@ jobs:
             pacman -S --noconfirm base-devel git meson ninja vala \
               gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
               json-glib glib2 libxml2 gobject-introspection wget patchelf \
-              hicolor-icon-theme desktop-file-utils libgee imagemagick
+              hicolor-icon-theme desktop-file-utils libgee
 
             git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
             cd tuba-src
@@ -38,10 +38,10 @@ jobs:
               [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
             done
 
-            # Generar un icono PNG negro de 256x256
-            convert -size 256x256 xc:black AppDir/dev.geopjr.Tuba.png
+            # Copiar el icono SVG desde la raíz del repo al AppDir
+            cp dev.geopjr.Tuba.svg AppDir/
 
-            # Archivo .desktop con campo Icon correcto
+            # Archivo .desktop con campo Icon correcto (sin extensión)
             echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
             echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
@@ -75,7 +75,8 @@ jobs:
       - name: Debug .desktop y icono
         run: |
           cat AppDir/dev.geopjr.Tuba.desktop
-          file AppDir/dev.geopjr.Tuba.png
+          file AppDir/dev.geopjr.Tuba.svg
+          ls -lh AppDir/
 
       - name: Construir AppImage
         run: |

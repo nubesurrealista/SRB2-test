@@ -40,8 +40,9 @@ jobs:
         run: |
           mkdir -p AppDir/usr/bin
           TRACKMA_BIN="$(which trackma-gtk)"
-          cp "$TRACKMA_BIN" AppDir/usr/bin/trackma-gtk.py
-          chmod +x AppDir/usr/bin/trackma-gtk.py
+          cp "$TRACKMA_BIN" AppDir/usr/bin/trackma-gtk
+          chmod +x AppDir/usr/bin/trackma-gtk
+          head -n 1 AppDir/usr/bin/trackma-gtk | grep env || sed -i '1i #!/usr/bin/env python3' AppDir/usr/bin/trackma-gtk
           # Copia el ícono si existe
           if [ -f /usr/share/icons/hicolor/128x128/apps/trackma.png ]; then
             mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
@@ -66,12 +67,8 @@ jobs:
               name: Trackma GTK
               icon: trackma
               version: "git"
-              exec: usr/bin/trackma-gtk.py
+              exec: usr/bin/trackma-gtk
               exec_args: ""
-            runtime:
-              path_mappings:
-                - "/usr/lib/:usr/lib/"
-                - "/usr/share/:usr/share/"
             files:
               include:
                 - /usr/bin/python3

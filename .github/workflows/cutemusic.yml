@@ -20,7 +20,8 @@ jobs:
             libbsd-dev libunwind-dev libelf-dev \
             zlib1g-dev libssl-dev libcurl4-openssl-dev libxml2-dev \
             python3-pip cmake g++ default-jdk-headless \
-            libsdl2-dev libx11-dev libxext-dev
+            libsdl2-dev libx11-dev libxext-dev \
+            libopus-dev libogg-dev libvorbis-dev libpng-dev libjpeg-dev
 
       - name: Build and install wolfSSL
         run: |

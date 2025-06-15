@@ -55,6 +55,13 @@ jobs:
           make ____LIBDIR=lib -j$(nproc)
           sudo make ____LIBDIR=lib install
           cd ..
+          sudo ldconfig
+
+      - name: Debug ART install
+        run: |
+          echo "Listing libart* in /usr/local/lib and /usr/lib"
+          find /usr/local/lib -name "libart*"
+          find /usr/lib -name "libart*"
 
       - name: Build and install libopensles-standalone
         run: |
@@ -67,6 +74,9 @@ jobs:
           cd ../..
 
       - name: Build and install Android Translation Layer (ATL)
+        env:
+          LD_LIBRARY_PATH: "/usr/local/lib:$LD_LIBRARY_PATH"
+          LIBRARY_PATH: "/usr/local/lib:$LIBRARY_PATH"
         run: |
           git clone https://gitlab.com/android_translation_layer/android_translation_layer.git
           cd android_translation_layer

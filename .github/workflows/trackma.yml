@@ -1,4 +1,4 @@
-name: Build Trackma GTK AppImage
+name: Build Trackma GTK .deb package
 
 on:
   workflow_dispatch:
@@ -16,9 +16,8 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            python3 python3-pip python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
-            desktop-file-utils wget
+          sudo apt-get install -y python3 python3-pip python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+            desktop-file-utils ruby ruby-dev build-essential wget
 
       - name: Clone Trackma
         run: git clone --recursive https://github.com/z411/trackma.git
@@ -28,58 +27,33 @@ jobs:
           pip3 install --upgrade pip
           pip3 install "git+https://github.com/z411/trackma.git#egg=Trackma[gtk,trackers]"
 
-      - name: Install python-appimage (user mode and add to PATH)
+      - name: Install PyInstaller and fpm
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --user --upgrade python-appimage
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          pip3 install pyinstaller
+          sudo gem install --no-document fpm
 
-      - name: Find trackma-gtk executable and desktop/icon files
-        id: locate_files
+      - name: Build executable with PyInstaller
         run: |
-          TRACKMA_GTK_PATH=$(which trackma-gtk)
-          if [ -z "$TRACKMA_GTK_PATH" ]; then
-            echo "trackma-gtk not found!" >&2
-            exit 1
-          fi
-          echo "trackma_gtk_path=$TRACKMA_GTK_PATH" >> $GITHUB_OUTPUT
-          # Busca archivo desktop
-          if [ -f /usr/share/applications/trackma-gtk.desktop ]; then
-            echo "desktop_file=/usr/share/applications/trackma-gtk.desktop" >> $GITHUB_OUTPUT
-          elif [ -f ./trackma/data/trackma-gtk.desktop ]; then
-            echo "desktop_file=./trackma/data/trackma-gtk.desktop" >> $GITHUB_OUTPUT
-          else
-            echo "desktop_file=" >> $GITHUB_OUTPUT
-          fi
-          # Busca icono
-          if [ -f /usr/share/icons/hicolor/128x128/apps/trackma.png ]; then
-            echo "icon_file=/usr/share/icons/hicolor/128x128/apps/trackma.png" >> $GITHUB_OUTPUT
-          elif [ -f ./trackma/data/trackma.png ]; then
-            echo "icon_file=./trackma/data/trackma.png" >> $GITHUB_OUTPUT
-          else
-            echo "icon_file=" >> $GITHUB_OUTPUT
-          fi
+          pyinstaller --name trackma-gtk --onefile $(which trackma-gtk)
+          ls -lh dist/
 
-      - name: Build AppImage with python-appimage
+      - name: Build .deb package with fpm
         run: |
-          set -e
-          export PYAPP_EXECUTABLE="${{ steps.locate_files.outputs.trackma_gtk_path }}"
-          export PYAPP_DESKTOP="${{ steps.locate_files.outputs.desktop_file }}"
-          export PYAPP_ICON="${{ steps.locate_files.outputs.icon_file }}"
-          CMD="python3 -m appimage build \"$PYAPP_EXECUTABLE\" --name trackma-gtk"
-          if [ -n "$PYAPP_DESKTOP" ]; then
-            CMD="$CMD --desktop \"$PYAPP_DESKTOP\""
-          fi
-          if [ -n "$PYAPP_ICON" ]; then
-            CMD="$CMD --icon \"$PYAPP_ICON\""
-          fi
-          CMD="$CMD --output Trackma-gtk-x86_64.AppImage"
-          echo "Running: $CMD"
-          eval $CMD
+          mkdir -p buildroot/usr/bin/
+          cp dist/trackma-gtk buildroot/usr/bin/
+          fpm -s dir -t deb \
+            -n trackma-gtk \
+            -v "1.0.0" \
+            --prefix=/ \
+            -C buildroot \
+            --description "Trackma GTK Python app packaged with PyInstaller" \
+            --license "GPL-3.0" \
+            --maintainer "nubesurrealista <github@nubesurrealista>" \
+            .
 
-      - name: Upload AppImage artifact
+      - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trackma-gtk-AppImage
-          path: 'Trackma-gtk-x86_64.AppImage'
+          name: trackma-gtk-deb
+          path: '*.deb'
           if-no-files-found: error

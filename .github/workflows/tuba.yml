@@ -13,7 +13,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build AppDir in Arch Linux Docker
+      - name: Build AppDir in Arch Linux Docker (with SVG to PNG conversion)
         run: |
           set -euxo pipefail
           docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
@@ -21,7 +21,7 @@ jobs:
             pacman -S --noconfirm base-devel git meson ninja vala \
               gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
               json-glib glib2 libxml2 gobject-introspection wget patchelf \
-              hicolor-icon-theme desktop-file-utils libgee
+              hicolor-icon-theme desktop-file-utils libgee librsvg
 
             git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
             cd tuba-src
@@ -30,7 +30,7 @@ jobs:
             DESTDIR=/workspace/AppDir meson install -C build
             cd /workspace
 
-            mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
+            mkdir -p AppDir/usr/lib AppDir/usr/bin
 
             EXEC=tuba
 
@@ -38,23 +38,34 @@ jobs:
               [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
             done
 
-            # Copiar el icono SVG desde la raíz del repo al AppDir
+            # Copia SVG al AppDir (opcional, solo como recurso extra)
             cp dev.geopjr.Tuba.svg AppDir/
 
-            # Archivo .desktop con campo Icon correcto (sin extensión)
-            echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
-            echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
-            echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
-            echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
-            echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop
-            echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
-            echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
-            echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
+            # Convierte SVG a PNG (AppImage requiere PNG)
+            rsvg-convert -w 256 -h 256 AppDir/dev.geopjr.Tuba.svg -o AppDir/dev.geopjr.Tuba.png
 
-            echo '#!/bin/sh' > AppDir/AppRun
-            echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
-            echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
-            echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
+            # Verifica que el PNG existe y es válido
+            file AppDir/dev.geopjr.Tuba.png | grep 'PNG image data' || (echo 'ERROR: Icono PNG no válido' && exit 1)
+
+            # Archivo .desktop correcto
+            cat > AppDir/dev.geopjr.Tuba.desktop << EOF
+[Desktop Entry]
+Type=Application
+Name=Tuba
+Exec=tuba
+Icon=dev.geopjr.Tuba
+Categories=Network;
+Comment=Browse the Fediverse
+Terminal=false
+EOF
+
+            # AppRun simple
+            cat > AppDir/AppRun << EOF
+#!/bin/sh
+HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"
+export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"
+exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"
+EOF
             chmod +x AppDir/AppRun
           "
 
@@ -70,12 +81,12 @@ jobs:
 
       - name: Eliminar .DirIcon antes de empaquetar (por precaución)
         run: |
-          rm -f AppDir/.DirIcon
+          rm -f AppDir/.DirIcon || true
 
-      - name: Debug .desktop y icono
+      - name: Debug .desktop y icono (puedes desactivar si todo va bien)
         run: |
           cat AppDir/dev.geopjr.Tuba.desktop
-          file AppDir/dev.geopjr.Tuba.svg
+          file AppDir/dev.geopjr.Tuba.png
           ls -lh AppDir/
 
       - name: Construir AppImage

@@ -13,16 +13,17 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build AppDir in Arch Linux Docker (with SVG to PNG conversion)
+      - name: Build AppDir in Arch Linux Docker (SVG to PNG conversion)
         run: |
           set -euxo pipefail
-          docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c '
+          docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
             pacman -Syu --noconfirm
             pacman -S --noconfirm base-devel git meson ninja vala \
               gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
               json-glib glib2 libxml2 gobject-introspection wget patchelf \
               hicolor-icon-theme desktop-file-utils libgee librsvg
 
+            # Construcción de Tuba
             git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
             cd tuba-src
             meson setup build
@@ -34,40 +35,43 @@ jobs:
 
             EXEC=tuba
 
-            ldd AppDir/usr/bin/$EXEC | awk '"'"'{if ($3 ~ /^\\//) print $3}'"'"' | while read -r lib; do
-              [ -f "$lib" ] && cp -n "$lib" AppDir/usr/lib/ || true
+            # Copiar dependencias necesarias
+            ldd AppDir/usr/bin/$EXEC | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
+              [ -f \"$lib\" ] && cp -n \"$lib\" AppDir/usr/lib/ || true
             done
 
-            # Copia SVG al AppDir
+            # Copiar SVG y convertir a PNG
             cp dev.geopjr.Tuba.svg AppDir/
-
-            # Convierte SVG a PNG (AppImage requiere PNG)
             rsvg-convert -w 256 -h 256 AppDir/dev.geopjr.Tuba.svg -o AppDir/dev.geopjr.Tuba.png
 
-            # Verifica que el PNG existe y es válido
-            file AppDir/dev.geopjr.Tuba.png | grep "PNG image data" || (echo "ERROR: Icono PNG no válido" && exit 1)
+            # Verificar PNG
+            if ! file AppDir/dev.geopjr.Tuba.png | grep -q 'PNG image data'; then
+              echo 'ERROR: El icono PNG no es válido'
+              exit 1
+            fi
 
-            # Archivo .desktop correcto
-            cat > AppDir/dev.geopjr.Tuba.desktop <<EOF
-[Desktop Entry]
-Type=Application
-Name=Tuba
-Exec=tuba
-Icon=dev.geopjr.Tuba
-Categories=Network;
-Comment=Browse the Fediverse
-Terminal=false
-EOF
+            # Crear archivo .desktop
+            echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
+            echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
 
-            # AppRun simple
-            cat > AppDir/AppRun <<EOF
-#!/bin/sh
-HERE="\$(dirname "\$(readlink -f "\$0")")"
-export LD_LIBRARY_PATH="\$HERE/usr/lib:\$LD_LIBRARY_PATH"
-exec "\$HERE/usr/bin/\$EXEC" "\$@"
-EOF
+            # Crear AppRun
+            echo '#!/bin/sh' > AppDir/AppRun
+            echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
+            echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
+            echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
             chmod +x AppDir/AppRun
-          '
+
+            # Debug archivos críticos
+            ls -l AppDir/
+            cat AppDir/dev.geopjr.Tuba.desktop
+            file AppDir/dev.geopjr.Tuba.png
+          "
 
       - name: Instalar FUSE para AppImage
         run: |
@@ -82,12 +86,6 @@ EOF
       - name: Eliminar .DirIcon antes de empaquetar (por precaución)
         run: |
           rm -f AppDir/.DirIcon || true
-
-      - name: Debug .desktop y icono (puedes quitar este paso si todo va bien)
-        run: |
-          cat AppDir/dev.geopjr.Tuba.desktop
-          file AppDir/dev.geopjr.Tuba.png
-          ls -lh AppDir/
 
       - name: Construir AppImage
         run: |

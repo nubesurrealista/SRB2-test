@@ -57,18 +57,15 @@ jobs:
           cd ..
           sudo ldconfig
 
-      - name: Symlink ART libraries for Meson
+      - name: Symlink all installed ART libraries for Meson
         run: |
-          for lib in /usr/local/lib/art/libart*.so; do
-            sudo ln -sf "$lib" /usr/local/lib/$(basename "$lib")
-          done
-          sudo ldconfig
-
-      - name: Debug ART install
-        run: |
-          echo "Listing libart* in /usr/local/lib and /usr/local/lib/art"
-          find /usr/local/lib -name "libart*"
-          find /usr/local/lib/art -name "libart*"
+          ART_LIB_DIR="/usr/local/lib/art"
+          if [ -d "$ART_LIB_DIR" ]; then
+            for lib in "$ART_LIB_DIR"/*; do
+              sudo ln -sf "$lib" /usr/local/lib/$(basename "$lib")
+            done
+            sudo ldconfig
+          fi
 
       - name: Build and install libopensles-standalone
         run: |

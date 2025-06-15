@@ -1,0 +1,51 @@
+name: Build Tuba
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git meson ninja-build valac \
+            libgtk-4-dev libadwaita-1-dev libgee-0.8-dev \
+            libgtksourceview-5-dev libicu-dev libsecret-1-dev \
+            libwebkit2gtk-4.0-dev libenchant-2-dev libwebp-dev \
+            libjson-glib-dev libsoup-3.0-dev libxml2-dev \
+            libglib2.0-dev libgraphene-1.0-dev libpango1.0-dev \
+            libdconf-dev hicolor-icon-theme
+
+      - name: Clone Tuba source
+        run: |
+          git clone https://github.com/GeopJr/Tuba.git tuba-src
+          cd tuba-src
+          # Si quieres una versión específica, descomenta y ajusta:
+          # git checkout v0.7.0
+
+      - name: Build with Meson
+        run: |
+          cd tuba-src
+          meson setup build
+          meson compile -C build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuba-build
+          path: tuba-src/build/
+
+      - name: Upload binary shortcut
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuba-binary
+          path: |
+            tuba-src/build/dev.geopjr.Tuba

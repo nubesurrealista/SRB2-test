@@ -13,16 +13,15 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v4
 
-    - name: Build and package AppImage in Arch Linux Docker
+    - name: Build AppDir in Arch Linux Docker
       run: |
         set -euxo pipefail
-
         docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git meson ninja vala \
             gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
             json-glib glib2 libxml2 gobject-introspection wget patchelf \
-            hicolor-icon-theme desktop-file-utils libgee fuse2
+            hicolor-icon-theme desktop-file-utils libgee
 
           git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
           cd tuba-src
@@ -56,12 +55,16 @@ jobs:
           echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
           echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
           chmod +x AppDir/AppRun
-
-          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool
-          ./appimagetool AppDir
-          mv ./*.AppImage /workspace/
         "
+
+    - name: Download appimagetool
+      run: |
+        wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        chmod +x appimagetool
+
+    - name: Build AppImage on host
+      run: |
+        ./appimagetool AppDir
 
     - name: Upload AppImage
       uses: actions/upload-artifact@v4

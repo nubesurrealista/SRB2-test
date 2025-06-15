@@ -32,9 +32,11 @@ jobs:
 
             mkdir -p AppDir/usr/lib AppDir/usr/bin
 
-            # Copiar dependencias necesarias
+            # Copiar dependencias necesarias de forma robusta
             ldd AppDir/usr/bin/tuba | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
-              [ -f \"$lib\" ] && cp -n \"$lib\" AppDir/usr/lib/ || true
+              if [ -n \"\$lib\" ] && [ -f \"\$lib\" ]; then
+                cp -n \"\$lib\" AppDir/usr/lib/
+              fi
             done
 
             # Copiar SVG y convertir a PNG
@@ -57,7 +59,7 @@ jobs:
             echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
             echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
 
-            # Crear AppRun (¡sin variables no definidas!)
+            # Crear AppRun
             echo '#!/bin/sh' > AppDir/AppRun
             echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
             echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun

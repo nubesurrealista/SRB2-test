@@ -28,9 +28,11 @@ jobs:
           pip3 install --upgrade pip
           pip3 install "git+https://github.com/z411/trackma.git#egg=Trackma[gtk,trackers]"
 
-      - name: Install python-appimage
+      - name: Install python-appimage (user mode and add to PATH)
         run: |
-          pip3 install --upgrade python-appimage
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --user --upgrade python-appimage
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Find trackma-gtk executable and desktop/icon files
         id: locate_files

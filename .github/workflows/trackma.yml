@@ -74,7 +74,6 @@ jobs:
           AppImage:
             arch: x86_64
             update-information: "gh-releases-zsync|z411|trackma|latest|Trackma-gtk*.AppImage.zsync"
-            sign-key: null
           EOF
 
       - name: Build AppImage

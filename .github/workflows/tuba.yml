@@ -1,39 +1,72 @@
-    - name: Build AppDir in Arch Linux Docker
-      run: |
-        set -euxo pipefail
-        docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git meson ninja vala \
-            gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
-            json-glib glib2 libxml2 gobject-introspection wget patchelf \
-            hicolor-icon-theme desktop-file-utils libgee
+name: Build Tuba AppImage (Arch, sin linuxdeploy)
 
-          git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
-          cd tuba-src
-          meson setup build
-          meson compile -C build
-          DESTDIR=/workspace/AppDir meson install -C build
-          cd /workspace
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
 
-          mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
-          EXEC=tuba
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-          ldd AppDir/usr/bin/\$EXEC | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
-            [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
-          done
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-          echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
-          echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
-          echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
-          echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
-          # echo 'Icon=dev.geopjr.Tuba' >> AppDir/dev.geopjr.Tuba.desktop  # <--- QUITA ESTA LINEA
-          echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
-          echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
-          echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
+      - name: Build AppDir in Arch Linux Docker
+        run: |
+          set -euxo pipefail
+          docker run --rm -v "$PWD:/workspace" -w /workspace archlinux:latest bash -c "
+            pacman -Syu --noconfirm
+            pacman -S --noconfirm base-devel git meson ninja vala \
+              gtk4 libadwaita libsoup3 libsecret gtksourceview5 icu \
+              json-glib glib2 libxml2 gobject-introspection wget patchelf \
+              hicolor-icon-theme desktop-file-utils libgee
+            git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
+            cd tuba-src
+            meson setup build
+            meson compile -C build
+            DESTDIR=/workspace/AppDir meson install -C build
+            cd /workspace
+            mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
+            EXEC=tuba
+            ldd AppDir/usr/bin/\$EXEC | awk '{if (\$3 ~ /^\\//) print \$3}' | while read -r lib; do
+              [ -f \"\$lib\" ] && cp -n \"\$lib\" AppDir/usr/lib/ || true
+            done
+            echo '[Desktop Entry]' > AppDir/dev.geopjr.Tuba.desktop
+            echo 'Type=Application' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Name=Tuba' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Exec=tuba' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Categories=Network;' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Comment=Browse the Fediverse' >> AppDir/dev.geopjr.Tuba.desktop
+            echo 'Terminal=false' >> AppDir/dev.geopjr.Tuba.desktop
+            echo '#!/bin/sh' > AppDir/AppRun
+            echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
+            echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
+            echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
+            chmod +x AppDir/AppRun
+          "
 
-          echo '#!/bin/sh' > AppDir/AppRun
-          echo 'HERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"' >> AppDir/AppRun
-          echo 'export LD_LIBRARY_PATH=\"\$HERE/usr/lib:\$LD_LIBRARY_PATH\"' >> AppDir/AppRun
-          echo 'exec \"\$HERE/usr/bin/\$EXEC\" \"\$@\"' >> AppDir/AppRun
-          chmod +x AppDir/AppRun
-        "
+      - name: Install FUSE for AppImage
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+
+      - name: Download appimagetool
+        run: |
+          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+
+      - name: Ensure no .DirIcon before AppImage build
+        run: |
+          rm -f AppDir/.DirIcon
+
+      - name: Build AppImage on host
+        run: |
+          ./appimagetool AppDir
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuba-appimage
+          path: ./*.AppImage

@@ -1,4 +1,4 @@
-name: Build AppImage in Arch Linux (Manual, sin linuxdeploy)
+name: Build Tuba AppImage (Arch, sin linuxdeploy)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,8 @@ jobs:
 
     - name: Build and package AppImage in Arch Linux Docker
       run: |
-        docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -euxc '
+        set -euxo pipefail
+        docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -c '
           # 1. Instala dependencias necesarias
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git meson ninja vala \
@@ -23,7 +24,7 @@ jobs:
             json-glib glib2 libxml2 gobject-introspection wget patchelf \
             hicolor-icon-theme desktop-file-utils
 
-          # 2. Compila la app
+          # 2. Clona y compila Tuba
           git clone --depth=1 https://github.com/GeopJr/Tuba.git tuba-src
           cd tuba-src
           meson setup build
@@ -33,37 +34,48 @@ jobs:
 
           # 3. Prepara AppDir
           mkdir -p AppDir/usr/lib AppDir/usr/bin AppDir/usr/share
-          cp -r /workspace/AppDir/usr/* AppDir/usr/
-          # Si tu binario no está en AppDir/usr/bin/tuba, ajusta el nombre aquí
+          # Ajusta si el binario no se llama tuba
           EXEC=tuba
 
-          # 4. Copia dependencias requeridas
-          # Extrae las librerías necesarias (exceptuando las del sistema base)
-          mkdir -p AppDir/usr/lib
+          # 4. Copia dependencias requeridas (exceptuando las del sistema base)
           ldd AppDir/usr/bin/$EXEC | awk \'{ print $3 }\' | grep -vE "^/usr/(lib|lib32|lib64|libx32|libexec|bin)/ld-linux" | while read lib; do
             [ -f "$lib" ] && cp -n "$lib" AppDir/usr/lib/ || true
           done
 
-          # 5. Incluye iconos y desktop file
-          # Ajusta estos nombres si tu proyecto los genera diferente
-          cp tuba-src/data/dev.geopjr.Tuba.desktop AppDir/
-          cp tuba-src/data/dev.geopjr.Tuba.svg AppDir/
+          # 5. Crea el archivo .desktop mínimo
+          cat > AppDir/dev.geopjr.Tuba.desktop <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Tuba
+          Exec=tuba
+          Icon=dev.geopjr.Tuba
+          Categories=Network;
+          Comment=Browse the Fediverse
+          Terminal=false
+          EOF
 
-          # 6. Crea AppRun
-          cat > AppDir/AppRun <<EOF
+          # 6. Crea un icono dummy si no existe (puedes reemplazarlo por uno real si lo tienes)
+          if [ ! -f AppDir/dev.geopjr.Tuba.svg ]; then
+            cat > AppDir/dev.geopjr.Tuba.svg <<EOI
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="#666"/><text x="50%" y="50%" font-size="24" text-anchor="middle" fill="#fff" dy=".3em">T</text></svg>
+            EOI
+          fi
+
+          # 7. Crea AppRun
+          cat > AppDir/AppRun <<EOA
           #!/bin/sh
           HERE="\$(dirname "\$(readlink -f "\$0")")"
           export LD_LIBRARY_PATH="\$HERE/usr/lib:\$LD_LIBRARY_PATH"
           exec "\$HERE/usr/bin/$EXEC" "\$@"
-          EOF
+          EOA
           chmod +x AppDir/AppRun
 
-          # 7. Descarga y ejecuta appimagetool para crear el AppImage
+          # 8. Descarga y ejecuta appimagetool para crear el AppImage
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           ./appimagetool AppDir
 
-          # 8. Mueve el resultado al workspace
+          # 9. Mueve el resultado al workspace
           mv *.AppImage /workspace/
         '
 

@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Dependencias de sistema (incluye libbsd-dev y libunwind-dev)
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -17,7 +16,6 @@ jobs:
             libgudev-1.0-dev libopenxr-dev libportal-dev libsqlite3-dev libwebkitgtk-6.0-dev \
             autoconf libtool unzip wget openjdk-17-jdk libbsd-dev libunwind-dev
 
-      # 2. wolfSSL
       - name: Build and install wolfSSL
         run: |
           git clone https://github.com/wolfSSL/wolfssl.git
@@ -32,7 +30,6 @@ jobs:
           sudo make install
           cd ..
 
-      # 3. bionic_translation
       - name: Build and install bionic_translation
         run: |
           git clone https://gitlab.com/android_translation_layer/bionic_translation.git
@@ -43,7 +40,6 @@ jobs:
           sudo meson install
           cd ../..
 
-      # 4. art_standalone
       - name: Build and install art_standalone
         run: |
           git clone https://gitlab.com/android_translation_layer/art_standalone.git
@@ -52,7 +48,6 @@ jobs:
           sudo make ____LIBDIR=lib install
           cd ..
 
-      # 5. libopensles-standalone (opcional, recomendado)
       - name: Build and install libopensles-standalone
         run: |
           git clone https://gitlab.com/android_translation_layer/libopensles-standalone.git
@@ -63,7 +58,6 @@ jobs:
           sudo meson install
           cd ../..
 
-      # 6. Compilar Android Translation Layer (ATL)
       - name: Build and install Android Translation Layer (ATL)
         run: |
           git clone https://gitlab.com/android_translation_layer/android_translation_layer.git
@@ -74,7 +68,6 @@ jobs:
           DESTDIR=$GITHUB_WORKSPACE/atl-out meson install
           cd ../..
 
-      # 7. Build CuteMusic APK
       - name: Build CuteMusic APK
         run: |
           git clone https://github.com/sosauce/CuteMusic.git
@@ -82,18 +75,28 @@ jobs:
           ./gradlew assembleRelease
           cd ..
 
-      # 8. Preparar AppDir para AppImage
       - name: Prepare AppDir bundle
         run: |
           mkdir -p AppDir/atl
           cp -r atl-out/usr/* AppDir/atl/
           cp CuteMusic/app/build/outputs/apk/release/app-release.apk AppDir/
-          # Script lanzador
           echo '#!/bin/bash
           DIR="$(dirname "$(readlink -f "$0")")"
           exec "$DIR/atl/bin/atl" "$DIR/app-release.apk"
           ' > AppDir/AppRun
           chmod +x AppDir/AppRun
-          # Opcional: icono
-          if [ -f CuteMusic/app/src/main/res/mipmap-xxxhdpi](#)
-
+          if [ -f CuteMusic/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png ]; then
+            cp CuteMusic/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png AppDir/
+          fi
+
+      - name: Build AppImage
+        run: |
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage AppDir
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CuteMusic-Linux-ATL-AppImage
+          path: "*.AppImage"

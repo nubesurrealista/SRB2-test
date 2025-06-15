@@ -1,0 +1,114 @@
+name: Build CuteMusic Linux AppImage (ATL)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Dependencias de sistema para ATL y build tools
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential meson ninja-build pkg-config \
+            libasound2-dev libavcodec-dev libcap-dev libdrm-dev libglib2.0-dev libgtk-4-dev \
+            libgudev-1.0-dev libopenxr-dev libportal-dev libsqlite3-dev libwebkitgtk-6.0-dev \
+            autoconf libtool unzip wget openjdk-17-jdk
+
+      # 2. wolfSSL
+      - name: Build and install wolfSSL
+        run: |
+          git clone https://github.com/wolfSSL/wolfssl.git
+          cd wolfssl
+          git checkout v5.7.4-stable
+          autoreconf -i
+          ./configure --enable-shared --disable-opensslall --disable-opensslextra \
+            --enable-aescbc-length-checks --enable-curve25519 --enable-ed25519 \
+            --enable-ed25519-stream --enable-oldtls --enable-base64encode --enable-tlsx \
+            --enable-scrypt --disable-examples --enable-crl --enable-jni
+          make -j$(nproc)
+          sudo make install
+          cd ..
+
+      # 3. bionic_translation
+      - name: Build and install bionic_translation
+        run: |
+          git clone https://gitlab.com/android_translation_layer/bionic_translation.git
+          cd bionic_translation
+          meson setup builddir
+          cd builddir
+          meson compile -j $(nproc)
+          sudo meson install
+          cd ../..
+
+      # 4. art_standalone
+      - name: Build and install art_standalone
+        run: |
+          git clone https://gitlab.com/android_translation_layer/art_standalone.git
+          cd art_standalone
+          make ____LIBDIR=lib -j$(nproc)
+          sudo make ____LIBDIR=lib install
+          cd ..
+
+      # 5. libopensles-standalone (opcional, muchos APK lo requieren)
+      - name: Build and install libopensles-standalone
+        run: |
+          git clone https://gitlab.com/android_translation_layer/libopensles-standalone.git
+          cd libopensles-standalone
+          meson setup builddir
+          cd builddir
+          meson compile -j $(nproc)
+          sudo meson install
+          cd ../..
+
+      # 6. Compilar Android Translation Layer (ATL)
+      - name: Build and install Android Translation Layer (ATL)
+        run: |
+          git clone https://gitlab.com/android_translation_layer/android_translation_layer.git
+          cd android_translation_layer
+          meson setup builddir
+          cd builddir
+          meson compile -j $(nproc)
+          DESTDIR=$GITHUB_WORKSPACE/atl-out meson install
+          cd ../..
+
+      # 7. Build CuteMusic APK
+      - name: Build CuteMusic APK
+        run: |
+          git clone https://github.com/sosauce/CuteMusic.git
+          cd CuteMusic
+          ./gradlew assembleRelease
+          cd ..
+
+      # 8. Preparar AppDir para AppImage
+      - name: Prepare AppDir bundle
+        run: |
+          mkdir -p AppDir/atl
+          cp -r atl-out/usr/* AppDir/atl/
+          cp CuteMusic/app/build/outputs/apk/release/app-release.apk AppDir/
+          # Script lanzador
+          echo '#!/bin/bash
+          DIR="$(dirname "$(readlink -f "$0")")"
+          exec "$DIR/atl/bin/atl" "$DIR/app-release.apk"
+          ' > AppDir/AppRun
+          chmod +x AppDir/AppRun
+          # Opcional: icono
+          if [ -f CuteMusic/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png ]; then
+            cp CuteMusic/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png AppDir/
+          fi
+
+      # 9. Descargar y usar AppImageKit para generar AppImage
+      - name: Build AppImage
+        run: |
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage AppDir
+
+      # 10. Subir el AppImage resultante
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CuteMusic-Linux-ATL-AppImage
+          path: "*.AppImage"

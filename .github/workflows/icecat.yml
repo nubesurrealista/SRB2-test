@@ -1,4 +1,4 @@
-name: Build Impression with Meson
+name: Build Impression (solo español)
 
 on:
   workflow_dispatch:
@@ -18,13 +18,17 @@ jobs:
       - name: Clona el repositorio de Impression desde GitLab
         run: git clone --depth 1 https://gitlab.com/adhami3310/Impression.git
 
-      - name: Compila Impression con Meson y Ninja
+      - name: Elimina traducciones excepto español
+        run: |
+          find Impression/po -type f ! -name 'es.po' -name '*.po' -delete
+
+      - name: Compila Impression con Meson y Ninja (solo español)
         working-directory: Impression
         run: |
           meson --prefix=/usr build
           ninja -C build
 
-      - name: Empaqueta el binario (opcional)
+      - name: Empaqueta el binario
         working-directory: Impression/build
         run: tar czvf impression-build.tar.gz *
 

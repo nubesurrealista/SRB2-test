@@ -22,10 +22,14 @@ jobs:
         run: |
           find Impression/po -type f ! -name 'es.po' -name '*.po' -delete
 
+      - name: Ajusta meson.build para solo español
+        run: |
+          echo "i18n.gettext('impression', languages: ['es'])" > Impression/po/meson.build
+
       - name: Compila Impression con Meson y Ninja (solo español)
         working-directory: Impression
         run: |
-          meson --prefix=/usr build
+          meson setup build
           ninja -C build
 
       - name: Empaqueta el binario

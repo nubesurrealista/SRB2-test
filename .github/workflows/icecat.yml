@@ -18,8 +18,7 @@ jobs:
             nasm libgtk-3-dev libdbus-glib-1-dev checkinstall git
 
       - name: Clonar GNUzilla
-        run: |
-          git clone https://git.savannah.gnu.org/git/gnuzilla.git
+        run: git clone https://git.savannah.gnu.org/git/gnuzilla.git
 
       - name: Ejecutar makeicecat
         run: |
@@ -77,10 +76,8 @@ EOF
           cd "$OBJDIR"
           sudo checkinstall --install=no --pkgname=icecat --pkgversion=$(basename "$ICECATDIR" | cut -d- -f2) --default
 
-      - name: Subir artefactos
+      - name: Subir artefacto .deb
         uses: actions/upload-artifact@v4
         with:
-          name: icecat-artifacts
-          path: |
-            gnuzilla/output/icecat-*/icecat/obj-*/icecat*.deb
-            gnuzilla/output/icecat-*/icecat/obj-*/icecat*.tar.*
+          name: icecat-deb
+          path: gnuzilla/output/icecat-*/icecat/obj-*/icecat*.deb

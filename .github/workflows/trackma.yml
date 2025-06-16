@@ -1,59 +1,25 @@
-name: Build Trackma GTK .deb package
+name: Build Portable GNU Icecat
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 jobs:
-  build:
+  build-icecat:
     runs-on: ubuntu-latest
-
+    container:
+      image: guix/guix:latest
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
+      - name: Mostrar versión de Guix
+        run: guix --version
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
-            desktop-file-utils ruby ruby-dev build-essential wget
+      - name: Construir bundle portable de Icecat
+        run: guix pack -S /bin=bin icecat
 
-      - name: Clone Trackma
-        run: git clone --recursive https://github.com/z411/trackma.git
+      - name: Listar archivos generados
+        run: ls -lh gnu-pack-*.tar.gz
 
-      - name: Install Trackma with GTK and trackers extras
-        run: |
-          pip3 install --upgrade pip
-          pip3 install "git+https://github.com/z411/trackma.git#egg=Trackma[gtk,trackers]"
-
-      - name: Install PyInstaller and fpm
-        run: |
-          pip3 install pyinstaller
-          sudo gem install --no-document fpm
-
-      - name: Build executable with PyInstaller
-        run: |
-          pyinstaller --name trackma-gtk --onefile $(which trackma-gtk)
-          ls -lh dist/
-
-      - name: Build .deb package with fpm
-        run: |
-          mkdir -p buildroot/usr/bin/
-          cp dist/trackma-gtk buildroot/usr/bin/
-          fpm -s dir -t deb \
-            -n trackma-gtk \
-            -v "1.0.0" \
-            --prefix=/ \
-            -C buildroot \
-            --description "Trackma GTK Python app packaged with PyInstaller" \
-            --license "GPL-3.0" \
-            --maintainer "nubesurrealista <github@nubesurrealista>" \
-            .
-
-      - name: Upload .deb artifact
+      - name: Subir artefacto portable
         uses: actions/upload-artifact@v4
         with:
-          name: trackma-gtk-deb
-          path: '*.deb'
-          if-no-files-found: error
+          name: icecat-portable
+          path: gnu-pack-*.tar.gz

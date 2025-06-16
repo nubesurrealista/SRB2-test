@@ -9,10 +9,43 @@ jobs:
     container:
       image: kpengboy/trisquel
     steps:
-      - name: Actualizar e instalar dependencias de compilación
+      - name: Actualizar fuentes y preparar dependencias básicas
         run: |
           apt-get update
-          apt-get install -y python3 python3-pip clang llvm pkg-config libasound2-dev libpulse-dev cbindgen nodejs libxkbcommon-dev libpango1.0-dev libx11-xcb-dev libxrandr-dev libxcomposite-dev libxcursor-dev libxdamage-dev libxfixes-dev libxi-dev libxtst-dev nasm libgtk-3-dev libdbus-glib-1-dev checkinstall git wget
+          apt-get install -y wget ca-certificates
+
+      - name: Instalar Python3 y pip (con contramedidas)
+        run: |
+          set -e
+          apt-get update
+          apt-get install -y python3 || (echo "Fallo instalando python3" && exit 1)
+          # Intentar instalar pip normalmente
+          if ! apt-get install -y python3-pip; then
+            echo "python3-pip no está disponible, intentando instalación manual..."
+            wget https://bootstrap.pypa.io/get-pip.py
+            python3 get-pip.py
+            rm get-pip.py
+          fi
+          # Validar que pip esté instalado
+          if ! command -v pip3 && ! command -v pip; then
+            echo "pip no pudo ser instalado, abortando."
+            exit 2
+          fi
+
+      - name: Instalar dependencias de compilación
+        run: |
+          apt-get update
+          apt-get install -y clang llvm pkg-config libasound2-dev libpulse-dev \
+            nodejs libxkbcommon-dev libpango1.0-dev libx11-xcb-dev libxrandr-dev \
+            libxcomposite-dev libxcursor-dev libxdamage-dev libxfixes-dev \
+            libxi-dev libxtst-dev nasm libgtk-3-dev libdbus-glib-1-dev \
+            checkinstall git
+
+      - name: Instalar cbindgen (con contramedida)
+        run: |
+          if ! command -v cbindgen; then
+            pip3 install cbindgen || pip install cbindgen || (echo "No se pudo instalar cbindgen" && exit 3)
+          fi
 
       - name: Clonar el repositorio de GNUzilla
         run: git clone https://git.savannah.gnu.org/git/gnuzilla.git

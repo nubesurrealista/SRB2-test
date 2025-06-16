@@ -1,4 +1,4 @@
-name: Build Portable GNU Icecat
+name: Build Portable GNU Icecat with Parabola
 
 on:
   workflow_dispatch:
@@ -7,19 +7,31 @@ jobs:
   build-icecat:
     runs-on: ubuntu-latest
     container:
-      image: guix/guix:latest
+      image: parabola/archlinux
     steps:
-      - name: Mostrar versión de Guix
-        run: guix --version
+      - name: Actualizar e instalar dependencias de compilación
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git wget python python-pip clang llvm pkgconf \
+            alsa-lib libpulse cbindgen nodejs xorg-xkbcommon pango \
+            libx11 libxrandr libxcomposite libxcursor libxdamage libxfixes \
+            libxi libxtst nasm gtk3 dbus-glib checkinstall
 
-      - name: Construir bundle portable de Icecat
-        run: guix pack -S /bin=bin icecat
+      - name: Clonar el repositorio de GNUzilla
+        run: git clone https://git.savannah.gnu.org/git/gnuzilla.git
 
-      - name: Listar archivos generados
-        run: ls -lh gnu-pack-*.tar.gz
+      - name: Construir Icecat
+        run: |
+          cd gnuzilla
+          ./makeicecat
+
+      - name: Empaquetar binario portable
+        run: |
+          cd gnuzilla/output
+          tar czf icecat-portable.tar.gz *
 
       - name: Subir artefacto portable
         uses: actions/upload-artifact@v4
         with:
           name: icecat-portable
-          path: gnu-pack-*.tar.gz
+          path: gnuzilla/output/icecat-portable.tar.gz

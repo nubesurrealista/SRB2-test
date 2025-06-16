@@ -1,83 +1,35 @@
-name: Build GNU Icecat (Debian/Ubuntu Way)
+name: Build Impression with Meson
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-icecat:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Instalar dependencias
+      - name: Instala dependencias necesarias
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 python3-pip clang llvm pkg-config \
-            libasound2-dev libpulse-dev cbindgen nodejs libxkbcommon-dev \
-            libpango1.0-dev libx11-xcb-dev libxrandr-dev libxcomposite-dev \
-            libxcursor-dev libxdamage-dev libxfixes-dev libxi-dev libxtst-dev \
-            nasm libgtk-3-dev libdbus-glib-1-dev checkinstall git
+          sudo apt-get install -y git meson ninja-build pkg-config python3-pip gettext \
+            libgtk-4-dev libadwaita-1-dev libgranite-dev libarchive-dev \
+            appstream util-linux desktop-file-utils blueprint-compiler
 
-      - name: Clonar GNUzilla
-        run: git clone https://git.savannah.gnu.org/git/gnuzilla.git
+      - name: Clona el repositorio de Impression desde GitLab
+        run: git clone --depth 1 https://gitlab.com/adhami3310/Impression.git
 
-      - name: Ejecutar makeicecat
+      - name: Compila Impression con Meson y Ninja
+        working-directory: Impression
         run: |
-          cd gnuzilla
-          ./makeicecat
+          meson --prefix=/usr build
+          ninja -C build
 
-      - name: Crear .mozconfig mínimo
-        run: |
-          cd gnuzilla/output
-          ICECATDIR=$(find . -maxdepth 1 -type d -name "icecat-*")
-          if [ -z "$ICECATDIR" ]; then
-            echo "No se encontró carpeta icecat-*, abortando."
-            exit 1
-          fi
-          mkdir -p "$ICECATDIR/icecat"
-          cat <<EOF > "$ICECATDIR/icecat/.mozconfig"
-ac_add_options --enable-application=browser
-ac_add_options --prefix=/usr
-ac_add_options --enable-official-branding
-ac_add_options --disable-debug
-ac_add_options --disable-tests
-mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-icecat
-EOF
+      - name: Empaqueta el binario (opcional)
+        working-directory: Impression/build
+        run: tar czvf impression-build.tar.gz *
 
-      - name: Configurar Icecat
-        run: |
-          cd gnuzilla/output
-          ICECATDIR=$(find . -maxdepth 1 -type d -name "icecat-*")
-          cd "$ICECATDIR/icecat"
-          ./mach configure
-
-      - name: Compilar Icecat
-        run: |
-          cd gnuzilla/output
-          ICECATDIR=$(find . -maxdepth 1 -type d -name "icecat-*")
-          cd "$ICECATDIR/icecat"
-          ./mach build
-
-      - name: Empaquetar Icecat
-        run: |
-          cd gnuzilla/output
-          ICECATDIR=$(find . -maxdepth 1 -type d -name "icecat-*")
-          cd "$ICECATDIR/icecat"
-          ./mach package
-
-      - name: Construir .deb con checkinstall
-        run: |
-          cd gnuzilla/output
-          ICECATDIR=$(find . -maxdepth 1 -type d -name "icecat-*")
-          OBJDIR=$(find "$ICECATDIR/icecat" -maxdepth 1 -type d -name "obj-*")
-          if [ -z "$OBJDIR" ]; then
-            echo "No se encontró obj-*, abortando."
-            exit 2
-          fi
-          cd "$OBJDIR"
-          sudo checkinstall --install=no --pkgname=icecat --pkgversion=$(basename "$ICECATDIR" | cut -d- -f2) --default
-
-      - name: Subir artefacto .deb
+      - name: Sube el artefacto de build
         uses: actions/upload-artifact@v4
         with:
-          name: icecat-deb
-          path: gnuzilla/output/icecat-*/icecat/obj-*/icecat*.deb
+          name: impression-build
+          path: Impression/build/impression

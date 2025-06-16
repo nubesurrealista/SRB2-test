@@ -1,4 +1,4 @@
-name: Build Portable GNU Icecat with Trisquel
+name: Build GNU Icecat (Debian/Ubuntu Way)
 
 on:
   workflow_dispatch:
@@ -6,104 +6,60 @@ on:
 jobs:
   build-icecat:
     runs-on: ubuntu-latest
-    container:
-      image: kpengboy/trisquel
+
     steps:
-      - name: Actualizar fuentes y preparar utilidades básicas
+      - name: Instalar dependencias
         run: |
-          set -e
-          apt-get update
-          apt-get install -y wget ca-certificates || echo "::warning::Fallo instalando wget/ca-certificates, puede causar problemas posteriores"
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip clang llvm pkg-config \
+            libasound2-dev libpulse-dev cbindgen nodejs libxkbcommon-dev \
+            libpango1.0-dev libx11-xcb-dev libxrandr-dev libxcomposite-dev \
+            libxcursor-dev libxdamage-dev libxfixes-dev libxi-dev libxtst-dev \
+            nasm libgtk-3-dev libdbus-glib-1-dev checkinstall git
 
-      - name: Instalar Python3 y pip (varios métodos)
+      - name: Clonar GNUzilla
         run: |
-          set -e
-          apt-get update
-          # Instalar python3, intentar hasta 3 veces
-          for i in 1 2 3; do
-            apt-get install -y python3 && break || (echo "::warning::Intento $i fallido para instalar python3"; sleep 2)
-          done
-          # Validar python3
-          if ! command -v python3; then
-            echo "::error::No se pudo instalar python3"; exit 1
-          fi
-          # Instalar pip por paquete
-          if apt-get install -y python3-pip; then
-            echo "python3-pip instalado correctamente"
-          else
-            echo "::warning::python3-pip no disponible, probando instalación manual para python3.8"
-            wget -q https://bootstrap.pypa.io/pip/3.8/get-pip.py -O get-pip.py
-            if python3 get-pip.py; then
-              echo "pip instalado manualmente"
-            else
-              echo "::warning::Fallo la instalación manual de pip, intentando con easy_install"
-              apt-get install -y python3-setuptools && easy_install3 pip || echo "::error::No se pudo instalar pip de ninguna forma"
-            fi
-            rm -f get-pip.py
-          fi
-          # Validar pip
-          if ! command -v pip3 && ! command -v pip; then
-            echo "::error::pip no pudo ser instalado, abortando."
-            exit 2
-          fi
+          git clone https://git.savannah.gnu.org/git/gnuzilla.git
 
-      - name: Instalar dependencias de compilación principales
+      - name: Ejecutar makeicecat
         run: |
-          set -e
-          apt-get update
-          apt-get install -y clang llvm pkg-config libasound2-dev libpulse-dev \
-            nodejs libxkbcommon-dev libpango1.0-dev libx11-xcb-dev libxrandr-dev \
-            libxcomposite-dev libxcursor-dev libxdamage-dev libxfixes-dev \
-            libxi-dev libxtst-dev nasm libgtk-3-dev libdbus-glib-1-dev \
-            checkinstall git || echo "::warning::Algunas dependencias de compilación fallaron, revisa si es crítico para tu build"
-
-      - name: Instalar cbindgen (varios métodos)
-        run: |
-          set -e
-          if command -v cbindgen; then
-            echo "cbindgen ya está instalado"
-          elif pip3 install cbindgen || pip install cbindgen; then
-            echo "cbindgen instalado vía pip"
-          elif apt-get install -y cargo && cargo install cbindgen; then
-            echo "cbindgen instalado vía cargo"
-          else
-            echo "::error::No se pudo instalar cbindgen por ningún método, pero intentaremos seguir"
-          fi
-
-      - name: Clonar el repositorio de GNUzilla
-        run: |
-          set -e
-          if [ -d gnuzilla ]; then
-            echo "Directorio gnuzilla ya existe, saltando clonación"
-          else
-            git clone https://git.savannah.gnu.org/git/gnuzilla.git || (echo "::error::Fallo al clonar gnuzilla" && exit 3)
-          fi
-
-      - name: Construir Icecat
-        run: |
-          set -e
           cd gnuzilla
-          if ./makeicecat; then
-            echo "Compilación exitosa"
-          else
-            echo "::error::Fallo la compilación de Icecat"
-            exit 4
-          fi
+          ./makeicecat
 
-      - name: Empaquetar binario portable
+      - name: Configurar Icecat (copiar .mozconfig y configurar)
         run: |
-          set -e
-          if [ -d gnuzilla/output ]; then
-            cd gnuzilla/output
-            tar czf icecat-portable.tar.gz * || (echo "::error::Fallo al empaquetar el binario" && exit 5)
-          else
-            echo "::error::No se encontró el directorio de salida, abortando empaquetado"
-            exit 6
-          fi
+          cd gnuzilla/output
+          icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
+          cp ../data/buildscripts/*.mozconfig $icecatdir/icecat/.mozconfig
+          cd $icecatdir/icecat
+          ./mach configure
 
-      - name: Subir artefacto portable
-        if: success()
+      - name: Compilar Icecat
+        run: |
+          cd gnuzilla/output
+          icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
+          cd $icecatdir/icecat
+          ./mach build
+
+      - name: Empaquetar Icecat
+        run: |
+          cd gnuzilla/output
+          icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
+          cd $icecatdir/icecat
+          ./mach package
+
+      - name: Construir .deb con checkinstall
+        run: |
+          cd gnuzilla/output
+          icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
+          objdir=$(find $icecatdir -type d -name "obj-*")
+          cd $objdir
+          sudo checkinstall --install=no --pkgname=icecat --pkgversion=$(basename $icecatdir | cut -d- -f2) --default
+
+      - name: Subir artefactos
         uses: actions/upload-artifact@v4
         with:
-          name: icecat-portable
-          path: gnuzilla/output/icecat-portable.tar.gz
+          name: icecat-artifacts
+          path: |
+            gnuzilla/output/icecat-*/icecat/obj-*/icecat*.deb
+            gnuzilla/output/icecat-*/icecat/obj-*/icecat*.tar.*

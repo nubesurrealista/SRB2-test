@@ -26,35 +26,59 @@ jobs:
           cd gnuzilla
           ./makeicecat
 
-      - name: Configurar Icecat (copiar .mozconfig y configurar)
+      - name: Crear .mozconfig si no existe
         run: |
           cd gnuzilla/output
           icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
-          cp ../data/buildscripts/*.mozconfig $icecatdir/icecat/.mozconfig
-          cd $icecatdir/icecat
+          if [ -z "$icecatdir" ]; then
+            echo "No se encontró carpeta icecat-*, abortando."
+            exit 1
+          fi
+          if [ ! -f "$icecatdir/icecat/.mozconfig" ]; then
+            echo "Creando .mozconfig mínimo"
+            cat << EOF > "$icecatdir/icecat/.mozconfig"
+ac_add_options --enable-application=browser
+ac_add_options --prefix=/usr
+ac_add_options --enable-official-branding
+ac_add_options --disable-debug
+ac_add_options --disable-tests
+EOF
+          else
+            echo ".mozconfig ya existe"
+          fi
+
+      - name: Configurar Icecat
+        run: |
+          cd gnuzilla/output
+          icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
+          cd "$icecatdir/icecat"
           ./mach configure
 
       - name: Compilar Icecat
         run: |
           cd gnuzilla/output
           icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
-          cd $icecatdir/icecat
+          cd "$icecatdir/icecat"
           ./mach build
 
       - name: Empaquetar Icecat
         run: |
           cd gnuzilla/output
           icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
-          cd $icecatdir/icecat
+          cd "$icecatdir/icecat"
           ./mach package
 
       - name: Construir .deb con checkinstall
         run: |
           cd gnuzilla/output
           icecatdir=$(find . -maxdepth 1 -type d -name "icecat-*")
-          objdir=$(find $icecatdir -type d -name "obj-*")
-          cd $objdir
-          sudo checkinstall --install=no --pkgname=icecat --pkgversion=$(basename $icecatdir | cut -d- -f2) --default
+          objdir=$(find "$icecatdir/icecat" -maxdepth 1 -type d -name "obj-*")
+          if [ -z "$objdir" ]; then
+            echo "No se encontró obj-*, abortando."
+            exit 2
+          fi
+          cd "$objdir"
+          sudo checkinstall --install=no --pkgname=icecat --pkgversion=$(basename "$icecatdir" | cut -d- -f2) --default
 
       - name: Subir artefactos
         uses: actions/upload-artifact@v4

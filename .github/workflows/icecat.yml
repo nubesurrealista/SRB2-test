@@ -22,9 +22,10 @@ jobs:
         run: |
           find Impression/po -type f ! -name 'es.po' -name '*.po' -delete
 
-      - name: Ajusta meson.build para solo español
+      - name: Parchea referencias de idiomas para solo español
         run: |
-          echo "i18n.gettext('impression', languages: ['es'])" > Impression/po/meson.build
+          sed -i "s/'cs',//g; s/'da',//g; s/'de',//g; s/'el',//g; s/'en_GB',//g; s/'eo',//g; s/'es',//g; s/'eu',//g; s/'fr',//g; s/'hr',//g; s/'hu',//g; s/'id',//g; s/'it',//g; s/'ja',//g; s/'ko',//g; s/'nl',//g; s/'oc',//g; s/'pl',//g; s/'pt_BR',//g; s/'ru',//g; s/'sk',//g; s/'tr',//g; s/'zh_CN',//g;" Impression/po/meson.build
+          sed -i "s/languages: .*/languages: ['es']/" Impression/po/meson.build
 
       - name: Compila Impression con Meson y Ninja (solo español)
         working-directory: Impression

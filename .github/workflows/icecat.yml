@@ -1,4 +1,4 @@
-name: Build NitterizeMe APK
+name: Untrackme
 
 on:
   workflow_dispatch:
@@ -8,24 +8,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Instala dependencias necesarias
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git openjdk-17-jdk wget unzip
-
-      # 2. Configurar Java
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Clonar el repositorio de Framagit
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y git wget unzip
+
       - name: Clone NitterizeMe repo
         run: git clone --depth 1 https://framagit.org/tom79/nitterizeme.git
 
-      # 4. Descargar Gradle Wrapper si no existe
       - name: Ensure Gradle Wrapper
         working-directory: nitterizeme
         run: |
@@ -34,12 +28,10 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # 5. Construir la APK con firma debug
       - name: Build debug APK
         working-directory: nitterizeme
         run: ./gradlew assembleDebug
 
-      # 6. Subir la APK como artefacto
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

@@ -1,4 +1,4 @@
-name: Untrackme
+name: Untrackme Release APK
 
 on:
   workflow_dispatch:
@@ -24,21 +24,34 @@ jobs:
         working-directory: nitterizeme
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
+      - name: Restore keystore from secret
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > my-release-key.jks
+
+      - name: Create release signing properties
+        run: |
+          cat << EOF > nitterizeme/release-signing.properties
+          storeFile=../my-release-key.jks
+          storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}
+          keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}
+          EOF
+
+      - name: Build release APK
         working-directory: nitterizeme
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
 
       - name: List and collect APKs
         working-directory: nitterizeme
         run: |
           echo "Buscando APK generadas..."
-          find . -type f -name "*.apk"
+          find . -type f -name "*release.apk"
           mkdir -p ../apk-out
-          find . -type f -name "*.apk" -exec cp {} ../apk-out/ \;
+          find . -type f -name "*release.apk" -exec cp {} ../apk-out/ \;
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: untrackme-debug-apk
+          name: untrackme-release-apk
           path: apk-out/*.apk
           if-no-files-found: error

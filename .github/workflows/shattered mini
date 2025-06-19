@@ -1,0 +1,54 @@
+name: Build Minimal JRE for Shattered Pixel Dungeon
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar última release info
+        id: release
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/00-Evan/shattered-pixel-dungeon/releases/latest)
+          JAR_URL=$(echo "$LATEST" | grep browser_download_url | grep '.jar"' | cut -d '"' -f4)
+          echo "JAR_URL=$JAR_URL" >> $GITHUB_ENV
+
+      - name: Descargar .jar
+        run: |
+          wget "$JAR_URL"
+
+      - name: Instalar OpenJDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Determinar módulos necesarios
+        id: jdeps
+        run: |
+          JARFILE=$(ls *.jar)
+          MODULES=$(jdeps --print-module-deps $JARFILE)
+          echo "modules=$MODULES" >> $GITHUB_OUTPUT
+          echo "jarfile=$JARFILE" >> $GITHUB_OUTPUT
+
+      - name: Crear JRE minimalista
+        run: |
+          jlink --output custom-jre --add-modules ${{ steps.jdeps.outputs.modules }} --strip-debug --no-man-pages --no-header-files --compress=2
+
+      - name: Crear script de lanzamiento
+        run: |
+          echo '#!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          "$DIR/custom-jre/bin/java" -jar "$DIR/${{ steps.jdeps.outputs.jarfile }}"' > run.sh
+          chmod +x run.sh
+
+      - name: Empaquetar artefactos
+        run: tar czvf shattered-minimal.tar.gz *.jar custom-jre run.sh
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: shattered-minimal
+          path: shattered-minimal.tar.gz

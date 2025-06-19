@@ -25,9 +25,12 @@ jobs:
       - name: Restore keystore from secret
         run: echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nube.jks
 
+      - name: Move keystore to expected location
+        run: mv nube.jks nitterizeme/nube.jks
+
       - name: Create release signing properties
         run: |
-          echo "storeFile=../nube.jks" > nitterizeme/release-signing.properties
+          echo "storeFile=nube.jks" > nitterizeme/release-signing.properties
           echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> nitterizeme/release-signing.properties
           echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> nitterizeme/release-signing.properties
           echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> nitterizeme/release-signing.properties
@@ -35,7 +38,7 @@ jobs:
       - name: Inject signingConfigs into build.gradle
         run: |
           FILE="nitterizeme/app/build.gradle"
-          # Si el bloque signingConfigs no existe, lo insertamos después de buildFeatures
+          # Insert only if not present
           if ! grep -q "signingConfigs" "$FILE"; then
             awk '
               /buildFeatures[[:space:]]*{/ {
@@ -59,7 +62,6 @@ jobs:
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
-          # Si el buildType release no tiene asignado signingConfig, lo agregamos (es idempotente)
           if ! grep -q "signingConfig signingConfigs.release" "$FILE"; then
             awk '
               /buildTypes[[:space:]]*{/,/}/ {

@@ -1,7 +1,8 @@
----
 name: LogFox Release APK (Signed)
+
 on:
-  workflow_dispatch: null
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,37 +11,33 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: '21'
+
       - name: Clone LogFox repo
         run: git clone --depth 1 https://github.com/F0x1d/LogFox.git
+
       - name: Decode keystore into app dir
-        run: >
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d >
-          LogFox/app/nube.jks
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > LogFox/app/nube.jks
+
       - name: Create release signing properties in app dir
-        run: >
+        run: |
           echo "storeFile=nube.jks" > LogFox/app/release-signing.properties
-
           echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> LogFox/app/release-signing.properties
-
           echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> LogFox/app/release-signing.properties
-
           echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> LogFox/app/release-signing.properties
+
       - name: Ensure Gradle Wrapper is executable
         run: chmod +x ./LogFox/gradlew
+
       - name: Inject imports and signingConfigs into build.gradle.kts
-        run: >
+        run: |
           FILE="LogFox/app/build.gradle.kts"
-
           # Inyectar imports si no existen
-
           grep -q 'import java.util.Properties' "$FILE" || sed -i '1iimport java.util.Properties' "$FILE"
-
           grep -q 'import java.io.FileInputStream' "$FILE" || sed -i '1iimport java.io.FileInputStream' "$FILE"
-
-
+          
           # Inyectar signingConfigs solo si no existen
-
           if ! grep -q "signingConfigs" "$FILE"; then
             awk '
               /android[[:space:]]*{/ {
@@ -53,10 +50,10 @@ jobs:
                 print "    }"
                 print "    signingConfigs {"
                 print "        create(\"release\") {"
-                print "            storeFile = file(keystoreProperties[\"storeFile\"])"
-                print "            storePassword = keystoreProperties[\"storePassword\"]"
-                print "            keyAlias = keystoreProperties[\"keyAlias\"]"
-                print "            keyPassword = keystoreProperties[\"keyPassword\"]"
+                print "            storeFile = file(keystoreProperties[\"storeFile\"]?.toString())"
+                print "            storePassword = keystoreProperties[\"storePassword\"]?.toString()"
+                print "            keyAlias = keystoreProperties[\"keyAlias\"]?.toString()"
+                print "            keyPassword = keystoreProperties[\"keyPassword\"]?.toString()"
                 print "        }"
                 print "    }"
                 next
@@ -64,9 +61,7 @@ jobs:
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
-
           # Asignar signingConfig a release si falta
-
           if ! grep -q "signingConfig(signingConfigs.getByName(\"release\"))" "$FILE"; then
             awk '
               /buildTypes[[:space:]]*{/,/}/ {
@@ -79,16 +74,20 @@ jobs:
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
+
       - name: Build release APK
         run: |
           cd LogFox
           ./gradlew assembleRelease
+
       - name: List APKs
         run: find LogFox -type f -name "*.apk"
+
       - name: Collect APKs
         run: |
           mkdir -p apk-out
           find LogFox -type f -name "*.apk" -exec cp {} apk-out/ \;
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

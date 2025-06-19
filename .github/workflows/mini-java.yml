@@ -10,15 +10,11 @@ jobs:
       - name: Crear directorio de trabajo
         run: mkdir minimal-jdk
 
-      - name: Descargar JRE headless de Adoptium
+      - name: Descargar JRE headless de Adoptium Temurin 8
         working-directory: minimal-jdk
         run: |
-          wget https://github.com/adoptium/temurin17-binaries/releases/latest/download/OpenJDK17U-jre_x64_linux_hotspot_17_latest.tar.gz
-
-      - name: Extraer JRE
-        working-directory: minimal-jdk
-        run: |
-          tar -xzvf OpenJDK17U-jre_x64_linux_hotspot_17_latest.tar.gz
+          wget https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u452-b09/OpenJDK8U-jre_x64_linux_hotspot_8u452b09.tar.gz
+          tar -xzvf OpenJDK8U-jre_x64_linux_hotspot_8u452b09.tar.gz
 
       - name: Eliminar archivos innecesarios (opcional)
         working-directory: minimal-jdk
@@ -30,7 +26,7 @@ jobs:
                  ${JREFOLDER}/demo \
                  ${JREFOLDER}/sample \
                  ${JREFOLDER}/man \
-                 ${JREFOLDER}/include
+                 ${JREFOLDER}/include || true
 
       - name: Verificar keytool
         working-directory: minimal-jdk

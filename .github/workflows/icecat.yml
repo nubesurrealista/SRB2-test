@@ -28,8 +28,17 @@ jobs:
         working-directory: nitterizeme
         run: ./gradlew assembleDebug
 
+      - name: List and collect APKs
+        working-directory: nitterizeme
+        run: |
+          echo "Buscando APK generadas..."
+          find . -type f -name "*.apk"
+          mkdir -p ../apk-out
+          find . -type f -name "*.apk" -exec cp {} ../apk-out/ \;
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: untrackme-debug-apk
-          path: nitterizeme/app/build/outputs/apk/debug/app-debug.apk
+          path: apk-out/*.apk
+          if-no-files-found: error

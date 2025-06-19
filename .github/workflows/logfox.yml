@@ -28,9 +28,18 @@ jobs:
           echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> LogFox/app/release-signing.properties
       - name: Ensure Gradle Wrapper is executable
         run: chmod +x ./LogFox/gradlew
-      - name: Inject signingConfigs into build.gradle.kts
+      - name: Inject imports and signingConfigs into build.gradle.kts
         run: >
           FILE="LogFox/app/build.gradle.kts"
+
+          # Inyectar imports si no existen
+
+          grep -q 'import java.util.Properties' "$FILE" || sed -i '1iimport java.util.Properties' "$FILE"
+
+          grep -q 'import java.io.FileInputStream' "$FILE" || sed -i '1iimport java.io.FileInputStream' "$FILE"
+
+
+          # Inyectar signingConfigs solo si no existen
 
           if ! grep -q "signingConfigs" "$FILE"; then
             awk '
@@ -38,16 +47,16 @@ jobs:
                 print $0
                 print ""
                 print "    val keystorePropertiesFile = file(\"release-signing.properties\")"
-                print "    val keystoreProperties = java.util.Properties()"
+                print "    val keystoreProperties = Properties()"
                 print "    if (keystorePropertiesFile.exists()) {"
-                print "        keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))"
+                print "        keystoreProperties.load(FileInputStream(keystorePropertiesFile))"
                 print "    }"
                 print "    signingConfigs {"
                 print "        create(\"release\") {"
-                print "            storeFile = file(keystoreProperties[\"storeFile\"] as String?)"
-                print "            storePassword = keystoreProperties[\"storePassword\"] as String?"
-                print "            keyAlias = keystoreProperties[\"keyAlias\"] as String?"
-                print "            keyPassword = keystoreProperties[\"keyPassword\"] as String?"
+                print "            storeFile = file(keystoreProperties[\"storeFile\"])"
+                print "            storePassword = keystoreProperties[\"storePassword\"]"
+                print "            keyAlias = keystoreProperties[\"keyAlias\"]"
+                print "            keyPassword = keystoreProperties[\"keyPassword\"]"
                 print "        }"
                 print "    }"
                 next
@@ -55,6 +64,8 @@ jobs:
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
+
+          # Asignar signingConfig a release si falta
 
           if ! grep -q "signingConfig(signingConfigs.getByName(\"release\"))" "$FILE"; then
             awk '

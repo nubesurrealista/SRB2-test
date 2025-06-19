@@ -13,38 +13,32 @@ jobs:
           distribution: temurin
           java-version: '11'
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y git wget unzip
-
       - name: Clone UntrackMe repo
         run: git clone --depth 1 https://framagit.org/tom79/nitterizeme.git
 
-      - name: Ensure Gradle Wrapper
-        run: chmod +x ./nitterizeme/gradlew
-
-      - name: Restore keystore from secret
-        run: echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nube.jks
-
-      - name: Move keystore to expected location
-        run: mv nube.jks nitterizeme/nube.jks
-
-      - name: Create release signing properties
+      - name: Decode keystore into app dir
         run: |
-          echo "storeFile=nube.jks" > nitterizeme/release-signing.properties
-          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> nitterizeme/release-signing.properties
-          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> nitterizeme/release-signing.properties
-          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> nitterizeme/release-signing.properties
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nitterizeme/app/nube.jks
+
+      - name: Create release signing properties in app dir
+        run: |
+          echo "storeFile=nube.jks" > nitterizeme/app/release-signing.properties
+          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> nitterizeme/app/release-signing.properties
+          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> nitterizeme/app/release-signing.properties
+          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> nitterizeme/app/release-signing.properties
+
+      - name: Ensure Gradle Wrapper is executable
+        run: chmod +x ./nitterizeme/gradlew
 
       - name: Inject signingConfigs into build.gradle
         run: |
           FILE="nitterizeme/app/build.gradle"
-          # Insert only if not present
           if ! grep -q "signingConfigs" "$FILE"; then
             awk '
               /buildFeatures[[:space:]]*{/ {
                 print $0
                 print ""
-                print "    def keystorePropertiesFile = rootProject.file(\"release-signing.properties\")"
+                print "    def keystorePropertiesFile = file(\"release-signing.properties\")"
                 print "    def keystoreProperties = new Properties()"
                 print "    if (keystorePropertiesFile.exists()) {"
                 print "        keystoreProperties.load(new FileInputStream(keystorePropertiesFile))"
@@ -76,7 +70,9 @@ jobs:
           fi
 
       - name: Build all release APKs (all flavors)
-        run: cd nitterizeme && ./gradlew assembleFullLinksRelease assembleLiteRelease
+        run: |
+          cd nitterizeme
+          ./gradlew -p app assembleFullLinksRelease assembleLiteRelease
 
       - name: List APKs
         run: find nitterizeme -type f -name "*.apk"

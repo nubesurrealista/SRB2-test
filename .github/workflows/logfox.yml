@@ -1,55 +1,53 @@
-name: Build & Sign APK from External Repo
-
+---
+name: LogFox Release APK (Signed)
 on:
-  workflow_dispatch:
-
+  workflow_dispatch: null
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up JDK 11
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '11'
-
-      - name: Clone Source Repo
-        # Cambia la URL por la del repo que deseas compilar (ejemplo: LogFox)
+          java-version: "21"
+      - name: Clone LogFox repo
         run: git clone --depth 1 https://github.com/F0x1d/LogFox.git
-
       - name: Decode keystore into app dir
-        run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > LogFox/app/nube.jks
-
+        run: >
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d >
+          LogFox/app/nube.jks
       - name: Create release signing properties in app dir
-        run: |
+        run: >
           echo "storeFile=nube.jks" > LogFox/app/release-signing.properties
-          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> LogFox/app/release-signing.properties
-          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> LogFox/app/release-signing.properties
-          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> LogFox/app/release-signing.properties
 
+          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> LogFox/app/release-signing.properties
+
+          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> LogFox/app/release-signing.properties
+
+          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> LogFox/app/release-signing.properties
       - name: Ensure Gradle Wrapper is executable
         run: chmod +x ./LogFox/gradlew
+      - name: Inject signingConfigs into build.gradle.kts
+        run: >
+          FILE="LogFox/app/build.gradle.kts"
 
-      - name: Inject signingConfigs into build.gradle
-        run: |
-          FILE="LogFox/app/build.gradle"
           if ! grep -q "signingConfigs" "$FILE"; then
             awk '
-              /buildFeatures[[:space:]]*{/ {
+              /android[[:space:]]*{/ {
                 print $0
                 print ""
-                print "    def keystorePropertiesFile = file(\"release-signing.properties\")"
-                print "    def keystoreProperties = new Properties()"
+                print "    val keystorePropertiesFile = file(\"release-signing.properties\")"
+                print "    val keystoreProperties = java.util.Properties()"
                 print "    if (keystorePropertiesFile.exists()) {"
-                print "        keystoreProperties.load(new FileInputStream(keystorePropertiesFile))"
+                print "        keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))"
                 print "    }"
                 print "    signingConfigs {"
-                print "        release {"
-                print "            storeFile file(keystoreProperties[\"storeFile\"])"
-                print "            storePassword keystoreProperties[\"storePassword\"]"
-                print "            keyAlias keystoreProperties[\"keyAlias\"]"
-                print "            keyPassword keystoreProperties[\"keyPassword\"]"
+                print "        create(\"release\") {"
+                print "            storeFile = file(keystoreProperties[\"storeFile\"] as String?)"
+                print "            storePassword = keystoreProperties[\"storePassword\"] as String?"
+                print "            keyAlias = keystoreProperties[\"keyAlias\"] as String?"
+                print "            keyPassword = keystoreProperties[\"keyPassword\"] as String?"
                 print "        }"
                 print "    }"
                 next
@@ -57,35 +55,32 @@ jobs:
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
-          if ! grep -q "signingConfig signingConfigs.release" "$FILE"; then
+
+          if ! grep -q "signingConfig(signingConfigs.getByName(\"release\"))" "$FILE"; then
             awk '
               /buildTypes[[:space:]]*{/,/}/ {
                 if ($0 ~ /release[[:space:]]*{/) {
                   print $0
-                  print "            signingConfig signingConfigs.release"
+                  print "            signingConfig(signingConfigs.getByName(\"release\"))"
                   next
                 }
               }
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
-
-      - name: Build all release APKs (all flavors)
+      - name: Build release APK
         run: |
           cd LogFox
-          ./gradlew -p app assembleRelease
-
+          ./gradlew assembleRelease
       - name: List APKs
         run: find LogFox -type f -name "*.apk"
-
       - name: Collect APKs
         run: |
           mkdir -p apk-out
           find LogFox -type f -name "*.apk" -exec cp {} apk-out/ \;
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: built-apks
+          name: logfox-release-apk
           path: apk-out/*.apk
           if-no-files-found: error

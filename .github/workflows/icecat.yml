@@ -1,4 +1,4 @@
-name: Build Impression (solo español)
+name: Build NitterizeMe APK
 
 on:
   workflow_dispatch:
@@ -8,37 +8,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Instala dependencias necesarias
+      # 1. Instala dependencias necesarias
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git meson ninja-build pkg-config python3-pip gettext \
-            libgtk-4-dev libadwaita-1-dev libgranite-dev libarchive-dev \
-            appstream util-linux desktop-file-utils blueprint-compiler
+          sudo apt-get install -y git openjdk-17-jdk wget unzip
 
-      - name: Clona el repositorio de Impression desde GitLab
-        run: git clone --depth 1 https://gitlab.com/adhami3310/Impression.git
+      # 2. Configurar Java
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Elimina traducciones excepto español
+      # 3. Clonar el repositorio de Framagit
+      - name: Clone NitterizeMe repo
+        run: git clone --depth 1 https://framagit.org/tom79/nitterizeme.git
+
+      # 4. Descargar Gradle Wrapper si no existe
+      - name: Ensure Gradle Wrapper
+        working-directory: nitterizeme
         run: |
-          find Impression/po -type f ! -name 'es.po' -name '*.po' -delete
+          if [ ! -f ./gradlew ]; then
+            gradle wrapper
+          fi
+          chmod +x ./gradlew
 
-      - name: Parchea referencias de idiomas para solo español
-        run: |
-          sed -i "s/'cs',//g; s/'da',//g; s/'de',//g; s/'el',//g; s/'en_GB',//g; s/'eo',//g; s/'es',//g; s/'eu',//g; s/'fr',//g; s/'hr',//g; s/'hu',//g; s/'id',//g; s/'it',//g; s/'ja',//g; s/'ko',//g; s/'nl',//g; s/'oc',//g; s/'pl',//g; s/'pt_BR',//g; s/'ru',//g; s/'sk',//g; s/'tr',//g; s/'zh_CN',//g;" Impression/po/meson.build
-          sed -i "s/languages: .*/languages: ['es']/" Impression/po/meson.build
+      # 5. Construir la APK con firma debug
+      - name: Build debug APK
+        working-directory: nitterizeme
+        run: ./gradlew assembleDebug
 
-      - name: Compila Impression con Meson y Ninja (solo español)
-        working-directory: Impression
-        run: |
-          meson setup build
-          ninja -C build
-
-      - name: Empaqueta el binario
-        working-directory: Impression/build
-        run: tar czvf impression-build.tar.gz *
-
-      - name: Sube el artefacto de build
+      # 6. Subir la APK como artefacto
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: impression-build
-          path: Impression/build/impression
+          name: nitterizeme-debug-apk
+          path: nitterizeme/app/build/outputs/apk/debug/app-debug.apk

@@ -30,12 +30,10 @@ jobs:
 
       - name: Create release signing properties
         run: |
-          cat << EOF > nitterizeme/release-signing.properties
-          storeFile=../nube.jks
-          storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}
-          keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}
-          EOF
+          echo "storeFile=../nube.jks" > nitterizeme/release-signing.properties
+          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> nitterizeme/release-signing.properties
+          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> nitterizeme/release-signing.properties
+          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> nitterizeme/release-signing.properties
 
       - name: Build release APK
         working-directory: nitterizeme

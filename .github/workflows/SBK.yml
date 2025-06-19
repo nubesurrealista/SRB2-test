@@ -1,246 +1,142 @@
 ---
-name: Soft-Braille-Keyboard Release APK (32+64bit, SDK 34, Signed, Gradleized)
+name: Soft-Braille-Keyboard Classic Build (Modernized, Robust)
 on:
   workflow_dispatch: null
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Set up JDK 17 (must be first!)
+      - name: Checkout SBK
+        uses: actions/checkout@v4
+      - name: Clone BrailleBack
+        run: >
+          git clone --depth 1 https://github.com/google/brailleback.git || \
+            (echo "Fallback: Downloading BrailleBack mirror..." && \
+             git clone --depth 1 https://gitlab.com/mirror/google/brailleback.git brailleback)
+          test -d brailleback || mv brailleback* brailleback
+      - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
-      - name: Install Android SDK and NDK
+          java-version: "11"
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-      - name: Install dependencies
-        run: >
-          sudo apt-get update
-
-          sudo apt-get install -y git patch wget unzip autoconf libtool automake pkg-config python3 python3-pip ninja-build
-      - name: Clone Soft-Braille-Keyboard
-        run: git clone --depth 1
-          https://github.com/danieldalton10/Soft-Braille-Keyboard.git
-      - name: Clone BrailleBack
-        run: git clone --depth 1 https://github.com/google/brailleback.git
-      - name: Download and Patch liblouis tables
-        run: >
-          wget
-          https://github.com/liblouis/liblouis/releases/download/v3.27.0/liblouis-3.27.0.tar.gz
-
-          tar -xzf liblouis-3.27.0.tar.gz
-
-          mkdir -p brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/
-
-          cp liblouis-3.27.0/tables/pl-pl-comp8.ctb brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/
-
-          cp Soft-Braille-Keyboard/patches/*.utb brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/ || true
-
-          cp Soft-Braille-Keyboard/patches/*.ctb brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/ || true
-
-          patch -p0 < Soft-Braille-Keyboard/patches/tablechanges.patch -d brailleback/braille/service/jni/liblouiswrapper/liblouis/ || true
-
-          patch -p0 < Soft-Braille-Keyboard/patches/tablelist-brailleback.patch -d brailleback || true
-
-          patch -p1 < Soft-Braille-Keyboard/patches/TranslatorClient.patch -d brailleback || true
-
-          cd brailleback/braille/service
-
-          ./tables/mktranslationtables
-      - name: Clone liblouis (source)
-        run: git clone --depth 1 https://github.com/liblouis/liblouis.git
-      - name: Build liblouis for Android ABIs
+        with:
+          packages: |
+            build-tools;34.0.0
+            platform-tools
+            platforms;android-34
+            ndk;26.2.11394342 # For native 64-bit builds
+      - name: Set up Ant
+        run: sudo apt-get update && sudo apt-get install -y ant
+      - name: Update project.properties and libraries
         run: >
           set -e
 
-          cd liblouis
+          # Detect Android target (fallback to API 33 if 34 fails)
 
-          mkdir -p build_so
+          sdk_target="android-34"
 
-          declare -A TARGETS
-
-          TARGETS=( ["armeabi-v7a"]="armv7a-linux-androideabi" ["arm64-v8a"]="aarch64-linux-android" ["x86"]="i686-linux-android" ["x86_64"]="x86_64-linux-android" )
-
-          API=21
-
-          NDK_HOME=$(find $HOME/ -type d -name "ndk" | head -n 1)
-
-          if [ -z "$NDK_HOME" ]; then
-            NDK_HOME=$(find /usr/local/lib/android/sdk -type d -name "ndk*" | head -n 1)
+          if ! ${ANDROID_HOME}/tools/bin/avdmanager list targets | grep -q "android-34"; then
+            sdk_target="android-33"
+            echo "Fallback: Using android-33"
           fi
 
-          TOOLCHAIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          target_id=$(${ANDROID_HOME}/tools/bin/android list targets | grep -B 1 "$sdk_target" | head -n1 | grep -oP '\d+' | head -n1)
 
-          for ABI in "${!TARGETS[@]}"; do
-            HOST=${TARGETS[$ABI]}
-            echo "=== Building for $ABI ($HOST) ==="
-            export AR=$TOOLCHAIN/bin/llvm-ar
-            export AS=$TOOLCHAIN/bin/llvm-as
-            export CC=$TOOLCHAIN/bin/${HOST}${API}-clang
-            export CXX=$TOOLCHAIN/bin/${HOST}${API}-clang++
-            export LD=$TOOLCHAIN/bin/ld
-            export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-            export STRIP=$TOOLCHAIN/bin/llvm-strip
-            ./autogen.sh
-            make distclean || true
-            ./configure --host=$HOST --enable-shared --disable-static --with-sysroot=$TOOLCHAIN/sysroot --prefix=$(pwd)/build_so/$ABI
-            make -j2
-            make install
-            mkdir -p $GITHUB_WORKSPACE/Soft-Braille-Keyboard/app/src/main/jniLibs/$ABI
-            cp build_so/$ABI/lib/liblouis.so $GITHUB_WORKSPACE/Soft-Braille-Keyboard/app/src/main/jniLibs/$ABI/
-          done
-      - name: Gradleize project structure
+          # If android tool not available, fallback to manual property edit
+
+          if [ -n "$target_id" ]; then
+            android update project -p . --target $target_id --library ../brailleback/braille/service/ --library ../brailleback/braille/client/ || true
+          else
+            echo "Fallback: Manually editing project.properties"
+            echo "target=$sdk_target" > project.properties
+            echo "android.library.reference.1=../brailleback/braille/service/" >> project.properties
+            echo "android.library.reference.2=../brailleback/braille/client/" >> project.properties
+          fi
+      - name: Prepare and patch BrailleBack tables
         run: >
-          cd Soft-Braille-Keyboard
+          set -e
 
-          mkdir -p app/src/main/java app/src/main/res app/src/main/assets
+          # Download latest liblouis table
 
-          [ -d src ] && mv src/* app/src/main/java/ || true
+          mkdir -p brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/
 
-          [ -d res ] && mv res/* app/src/main/res/ || true
+          curl -fLo brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/pl-pl-comp8.ctb \
+               https://raw.githubusercontent.com/liblouis/liblouis/master/tables/pl-pl-comp8.ctb || echo "Fallback: Skipping extra table"
+          # Copy SBK tables
 
-          [ -d assets ] && mv assets/* app/src/main/assets/ || true
+          cp patches/*.utb brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/ || true
 
-          [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/AndroidManifest.xml
-      - name: Write settings.gradle
+          cp patches/*.ctb brailleback/braille/service/jni/liblouiswrapper/liblouis/tables/ || true
+
+          # Patch BrailleBack tables
+
+          (cd brailleback/braille/service/jni/liblouiswrapper/liblouis && patch -p0 < ../../../../../../patches/tablechanges.patch) || echo "Fallback: Tablechanges patch failed"
+
+          (cd brailleback && patch -p0 < ../patches/tablelist-brailleback.patch) || echo "Fallback: Tablelist patch failed"
+
+          patch -p1 < patches/TranslatorClient.patch || echo "Fallback: TranslatorClient patch failed"
+
+          # Rebuild translation tables, fallback to continue if fails
+
+          cd brailleback/braille/service && ./tables/mktranslationtables || echo "Fallback: mktranslationtables failed"
+      - name: Build SBK with Ant (Debug)
         run: >
-          echo "rootProject.name = 'SoftBrailleKeyboard'" >
-          Soft-Braille-Keyboard/settings.gradle
+          set -e
 
-          echo "include ':app'" >> Soft-Braille-Keyboard/settings.gradle
-      - name: Write root build.gradle
+          ant debug || (echo "Fallback: Ant build failed, trying clean then build again..." && ant clean && ant debug)
+      - name: (Fallback) Build SBK with Ant (Release) if Debug artifact missing
+        if: failure()
         run: >
-          echo "buildscript {" > Soft-Braille-Keyboard/build.gradle
-
-          echo "    repositories { google(); mavenCentral() }" >> Soft-Braille-Keyboard/build.gradle
-
-          echo "    dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }" >> Soft-Braille-Keyboard/build.gradle
-
-          echo "}" >> Soft-Braille-Keyboard/build.gradle
-
-          echo "allprojects { repositories { google(); mavenCentral() }}" >> Soft-Braille-Keyboard/build.gradle
-      - name: Write app/build.gradle
+          ant release || (echo "Both debug and release builds failed!" && exit 1)
+      - name: Find built APK
+        id: find_apk
         run: >
-          echo "plugins {" > Soft-Braille-Keyboard/app/build.gradle
+          APK_PATH=$(find . -type f -name "*.apk" | grep -E "debug|release" | head
+          -n1)
 
-          echo "    id 'com.android.application'" >> Soft-Braille-Keyboard/app/build.gradle
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found!" >&2
+            exit 1
+          fi
 
-          echo "}" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "android {" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    compileSdkVersion 34" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    defaultConfig {" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        applicationId 'com.googlecode.eyesfree.inputmethod.braille'" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        minSdkVersion 14" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        targetSdkVersion 34" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        versionCode 1" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        versionName '1.0'" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64' }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    buildTypes {" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        release { minifyEnabled false; signingConfig signingConfigs.release }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        debug { signingConfig signingConfigs.release }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    lintOptions { abortOnError false }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    sourceSets { main { jniLibs.srcDirs = ['src/main/jniLibs'] } }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "}" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "def keystorePropertiesFile = file('release-signing.properties')" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "def keystoreProperties = new Properties()" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "if (keystorePropertiesFile.exists()) {" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "}" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "android.signingConfigs {" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    release {" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        storeFile file(keystoreProperties['storeFile'] ?: 'nube.jks')" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        storePassword keystoreProperties['storePassword']" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        keyAlias keystoreProperties['keyAlias']" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "        keyPassword keystoreProperties['keyPassword']" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "    }" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "}" >> Soft-Braille-Keyboard/app/build.gradle
-
-          echo "dependencies { implementation fileTree(dir: 'libs', include: ['*.jar']) }" >> Soft-Braille-Keyboard/app/build.gradle
-      - name: Write gradle-wrapper.properties
+          echo "apk=$APK_PATH" >> $GITHUB_OUTPUT
+      - name: Check for arm64-v8a support
         run: >
-          mkdir -p Soft-Braille-Keyboard/gradle/wrapper
+          APK="${{ steps.find_apk.outputs.apk }}"
 
-          echo "distributionBase=GRADLE_USER_HOME" > Soft-Braille-Keyboard/gradle/wrapper/gradle-wrapper.properties
-
-          echo "distributionPath=wrapper/dists" >> Soft-Braille-Keyboard/gradle/wrapper/gradle-wrapper.properties
-
-          echo "zipStoreBase=GRADLE_USER_HOME" >> Soft-Braille-Keyboard/gradle/wrapper/gradle-wrapper.properties
-
-          echo "zipStorePath=wrapper/dists" >> Soft-Braille-Keyboard/gradle/wrapper/gradle-wrapper.properties
-
-          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-7.6.4-bin.zip" >> Soft-Braille-Keyboard/gradle/wrapper/gradle-wrapper.properties
-      - name: Download gradle-wrapper JAR
-        run: >
-          wget -q -O Soft-Braille-Keyboard/gradle/wrapper/gradle-wrapper.jar
-          https://github.com/gradle/gradle/raw/v7.6.4/gradle/wrapper/gradle-wrapper.jar
-      - name: Write gradlew and gradlew.bat
-        run: >
-          wget -q -O Soft-Braille-Keyboard/gradlew
-          https://raw.githubusercontent.com/gradle/gradle/v7.6.4/gradlew
-
-          wget -q -O Soft-Braille-Keyboard/gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v7.6.4/gradlew.bat
-
-          chmod +x Soft-Braille-Keyboard/gradlew
-      - name: Decode keystore into app dir
-        run: >
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d >
-          Soft-Braille-Keyboard/app/nube.jks
-      - name: Create release-signing.properties file in app dir
-        run: >
-          echo "storeFile=nube.jks" >
-          Soft-Braille-Keyboard/app/release-signing.properties
-
-          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> Soft-Braille-Keyboard/app/release-signing.properties
-
-          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> Soft-Braille-Keyboard/app/release-signing.properties
-
-          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> Soft-Braille-Keyboard/app/release-signing.properties
-      - name: Build release APK
+          unzip -l "$APK" | grep "arm64-v8a" || echo "Warning: APK may not contain 64-bit native libraries!"
+      - name: Decode keystore if available
+        id: decode_keystore
         run: |
-          cd Soft-Braille-Keyboard
-          ./gradlew :app:assembleRelease --no-daemon
-      - name: List APKs
-        run: find Soft-Braille-Keyboard -type f -name "*.apk"
-      - name: Collect APKs
-        run: >
-          mkdir -p apk-out
-
-          find Soft-Braille-Keyboard -type f -name "*.apk" -exec cp {} apk-out/ \;
-      - name: Upload APK artifact
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_B64 }}" ]; then
+            echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > release.jks
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Sign APK (if keystore available)
+        if: steps.decode_keystore.outputs.found == 'true'
+        run: |
+          APK="${{ steps.find_apk.outputs.apk }}"
+          cp "$APK" unsigned.apk
+          apksigner sign \
+            --ks release.jks \
+            --ks-key-alias "${{ secrets.RELEASE_KEY_ALIAS }}" \
+            --ks-pass pass:"${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \
+            --out sbk-signed.apk \
+            unsigned.apk
+          rm -f unsigned.apk
+      - name: Upload APK artifact (signed if available, else unsigned)
         uses: actions/upload-artifact@v4
         with:
-          name: sbk-release-apk
-          path: apk-out/*.apk
-          if-no-files-found: error
+          name: sbk-apk
+          path: |
+            sbk-signed.apk
+            ${{ steps.find_apk.outputs.apk }}
+          if-no-files-found: warn

@@ -74,11 +74,11 @@ jobs:
             echo "jarfile=$JAR" >> $GITHUB_OUTPUT
           else
             echo "jdeps falló. Usando fallback manual..." | tee -a $LOG
-            # Fallback: módulos típicos para aplicaciones Java con UI y LWJGL
             modules="java.base,java.desktop,jdk.unsupported"
             echo "modules=$modules" >> $GITHUB_OUTPUT
             echo "jarfile=$JAR" >> $GITHUB_OUTPUT
             echo "fallback_modules=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generar JRE custom ultra-minimalista
         id: jlink

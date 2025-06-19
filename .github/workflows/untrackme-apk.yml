@@ -1,7 +1,8 @@
----
-name: Untrackme Release APK
+name: Untrackme Release APK (Signed)
+
 on:
-  workflow_dispatch: null
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,32 +11,79 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "11"
+          java-version: '11'
+
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y git wget unzip
+
       - name: Clone UntrackMe repo
         run: git clone --depth 1 https://framagit.org/tom79/nitterizeme.git
+
       - name: Ensure Gradle Wrapper
         run: chmod +x ./nitterizeme/gradlew
+
       - name: Restore keystore from secret
         run: echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nube.jks
+
       - name: Create release signing properties
-        run: >
+        run: |
           echo "storeFile=../nube.jks" > nitterizeme/release-signing.properties
-
           echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> nitterizeme/release-signing.properties
-
           echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> nitterizeme/release-signing.properties
-
           echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> nitterizeme/release-signing.properties
-      - name: Build release APK
-        run: cd nitterizeme && ./gradlew assembleRelease
+
+      - name: Inject signingConfigs into build.gradle
+        run: |
+          FILE="nitterizeme/app/build.gradle"
+          # Si el bloque signingConfigs no existe, lo insertamos después de buildFeatures
+          if ! grep -q "signingConfigs" "$FILE"; then
+            awk '
+              /buildFeatures[[:space:]]*{/ {
+                print $0
+                print ""
+                print "    def keystorePropertiesFile = rootProject.file(\"release-signing.properties\")"
+                print "    def keystoreProperties = new Properties()"
+                print "    if (keystorePropertiesFile.exists()) {"
+                print "        keystoreProperties.load(new FileInputStream(keystorePropertiesFile))"
+                print "    }"
+                print "    signingConfigs {"
+                print "        release {"
+                print "            storeFile file(keystoreProperties[\"storeFile\"])"
+                print "            storePassword keystoreProperties[\"storePassword\"]"
+                print "            keyAlias keystoreProperties[\"keyAlias\"]"
+                print "            keyPassword keystoreProperties[\"keyPassword\"]"
+                print "        }"
+                print "    }"
+                next
+              }
+              { print }
+            ' "$FILE" > tmp && mv tmp "$FILE"
+          fi
+          # Si el buildType release no tiene asignado signingConfig, lo agregamos (es idempotente)
+          if ! grep -q "signingConfig signingConfigs.release" "$FILE"; then
+            awk '
+              /buildTypes[[:space:]]*{/,/}/ {
+                if ($0 ~ /release[[:space:]]*{/) {
+                  print $0
+                  print "            signingConfig signingConfigs.release"
+                  next
+                }
+              }
+              { print }
+            ' "$FILE" > tmp && mv tmp "$FILE"
+          fi
+
+      - name: Build all release APKs (all flavors)
+        run: cd nitterizeme && ./gradlew assembleFullLinksRelease assembleLiteRelease
+
       - name: List APKs
         run: find nitterizeme -type f -name "*.apk"
+
       - name: Collect APKs
         run: |
           mkdir -p apk-out
           find nitterizeme -type f -name "*.apk" -exec cp {} apk-out/ \;
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

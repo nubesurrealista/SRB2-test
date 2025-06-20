@@ -1,20 +1,23 @@
----
 name: Build & Sign ALL Emu EX Plus Alpha APKs
+
 on:
-  workflow_dispatch: null
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this workflow repo
         uses: actions/checkout@v4
+
       - name: Clone emu-ex-plus-alpha source
         run: git clone --depth 1 https://github.com/Rakashazi/emu-ex-plus-alpha.git
-      - name: Install build dependencies
-        run: >
-          sudo apt-get update
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk ant build-essential gcc g++ make unzip wget
+
       - name: Set up Java & Android SDK/NDK
         uses: actions/setup-java@v4
         with:
@@ -22,27 +25,30 @@ jobs:
           java-version: "17"
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      - name: Decode keystore for signing
-        run: >
-          mkdir -p emu-ex-plus-alpha/app
 
+      - name: Decode keystore for signing
+        run: |
+          mkdir -p emu-ex-plus-alpha/app
           echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > emu-ex-plus-alpha/app/nube.jks
+
       - name: Build Imagine prerequisites
         run: |
           cd emu-ex-plus-alpha/imagine/bundle/all
           make || true # Algunos pueden fallar si ya están presentes
-      - name: Build Imagine core
+
+      - name: Build Imagine core (usar subcarpeta make)
         run: |
-          cd emu-ex-plus-alpha/imagine
+          cd emu-ex-plus-alpha/imagine/make
           make
+
       - name: Build EmuFramework
         run: |
           cd emu-ex-plus-alpha/EmuFramework
-          ant debug
-      - name: Build ALL emulators
-        run: >
-          cd emu-ex-plus-alpha
+          ant debug || ant
 
+      - name: Build ALL emulators (detecta y ejecuta build.sh donde exista)
+        run: |
+          cd emu-ex-plus-alpha
           for dir in *; do
             if [ -d "$dir" ] && [ -f "$dir/build.sh" ]; then
               echo "Compilando $dir"
@@ -52,16 +58,16 @@ jobs:
               cd ..
             fi
           done
+
       - name: Find unsigned APKs
         id: find_apks
-        run: >
+        run: |
           find emu-ex-plus-alpha -type f -name "*-unsigned.apk" > unsigned_apks.txt
-
           cat unsigned_apks.txt
-
           echo "APKS=$(cat unsigned_apks.txt | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
       - name: Sign APKs
-        run: >
+        run: |
           while read APK; do
             [ -z "$APK" ] && continue
             OUT_APK="${APK%-unsigned.apk}-signed.apk"
@@ -74,6 +80,7 @@ jobs:
               "$APK"
             echo "Firmado: $OUT_APK"
           done < unsigned_apks.txt
+
       - name: Upload all signed APKs
         uses: actions/upload-artifact@v4
         with:

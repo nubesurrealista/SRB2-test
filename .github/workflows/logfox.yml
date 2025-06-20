@@ -30,31 +30,27 @@ jobs:
           EOF
       - name: Ensure Gradle Wrapper is executable
         run: chmod +x ./LogFox/gradlew
-      - name: Inject signing config if missing (robust, Kotlin DSL)
+      - name: Inject signing config (only inside android block, Kotlin DSL)
         run: >
           FILE="LogFox/app/build.gradle.kts"
 
-          # Insert imports if missing
+          TMPFILE="LogFox/app/build.gradle.kts.tmp"
 
-          grep -q 'import java.util.Properties' "$FILE" || sed -i '1i\
+          # Add imports if missing
 
-          import java.util.Properties
+          grep -q 'import java.util.Properties' "$FILE" || sed -i '1iimport java.util.Properties' "$FILE"
 
-          ' "$FILE"
-
-          grep -q 'import java.io.FileInputStream' "$FILE" || sed -i '1i\
-
-          import java.io.FileInputStream
-
-          ' "$FILE"
+          grep -q 'import java.io.FileInputStream' "$FILE" || sed -i '1iimport java.io.FileInputStream' "$FILE"
 
 
-          # Only inject if signingConfigs block is missing (idempotent)
+          # Check if signingConfigs already present
 
-          if ! grep -q "signingConfigs" "$FILE"; then
+          if ! grep -q 'signingConfigs' "$FILE"; then
             awk '
-              /android[[:space:]]*{/ {
-                print $0
+              BEGIN { in_android = 0 }
+              /android[[:space:]]*\{/ { 
+                in_android = 1
+                print
                 print ""
                 print "    val keystorePropertiesFile = file(\"release-signing.properties\")"
                 print "    val keystoreProperties = Properties()"
@@ -72,37 +68,37 @@ jobs:
                 next
               }
               { print }
-            ' "$FILE" > tmp && mv tmp "$FILE"
+            ' "$FILE" > "$TMPFILE" && mv "$TMPFILE" "$FILE"
           fi
 
 
-          # Only inject buildTypes config if not present
+          # Only add buildTypes.release signingConfig if missing
 
-          if ! grep -q "signingConfig(signingConfigs.getByName(\"release\"))" "$FILE"; then
+          if ! grep -q 'signingConfig = signingConfigs.getByName("release")' "$FILE"; then
             awk '
-              /android[[:space:]]*{/ {
-                print $0
-                block=1
+              BEGIN { in_android = 0; in_buildtypes = 0 }
+              /android[[:space:]]*\{/ { in_android = 1 }
+              in_android && /buildTypes[[:space:]]*\{/ { in_buildtypes = 1 }
+              in_buildtypes && /getByName\("release"\)[[:space:]]*\{/ {
+                print
+                print "            signingConfig = signingConfigs.getByName(\"release\")"
                 next
               }
-              block && /}/ {
-                print ""
-                print "    buildTypes {"
-                print "        getByName(\"release\") {"
-                print "            isMinifyEnabled = false"
-                print "            signingConfig = signingConfigs.getByName(\"release\")"
-                print "        }"
-                print "    }"
-                block=0
+              /\}/ {
+                if (in_buildtypes) in_buildtypes = 0
+                else if (in_android) in_android = 0
               }
               { print }
-            ' "$FILE" > tmp && mv tmp "$FILE"
+            ' "$FILE" > "$TMPFILE" && mv "$TMPFILE" "$FILE"
           fi
-      - name: Show signature blocks for debug
-        run: |
-          echo "======= build.gradle.kts ======="
-          cat LogFox/app/build.gradle.kts
+      - name: Show gradle and properties for debug (extract)
+        run: >
+          echo "======= Extract of build.gradle.kts (android block) ======="
+
+          sed -n '/android[[:space:]]*{/,/^}/p' LogFox/app/build.gradle.kts | head -60
+
           echo "======= release-signing.properties ======="
+
           cat LogFox/app/release-signing.properties | sed 's/=.*/=***hidden***/'
       - name: Set up JDK 17
         uses: actions/setup-java@v4

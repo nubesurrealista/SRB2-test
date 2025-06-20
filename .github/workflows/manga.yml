@@ -1,36 +1,36 @@
+---
 name: Build & Sign Mihon 32bits APK
-
 on:
-  workflow_dispatch:
-
+  workflow_dispatch: null
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Clona Mihon
       - name: Clone Mihon source
         run: |
           git clone --depth 1 https://github.com/mihonapp/mihon.git
-
-      # Configura identidad de Git para cherry-pick
       - name: Set up git identity
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-
-      # Cherry-pick de los commits de Kahon, resolviendo conflicto si ocurre
       - name: Cherry-pick from Kahon (con resolución automática de Firebase/telemetry)
-        run: |
+        run: >
           set -e
+
           cd mihon
+
           git remote add kahon https://github.com/AmanoTeam/Kahon.git
+
           git fetch kahon
+
           git cherry-pick 16580dadfdff3a4ed20b57b2f03c4f90f715d983 || true
+
           git cherry-pick c56212ddfb67427bea6758d3963e863a5c2d0a8f || true
 
+
           # Si hay conflicto en gradle/libs.versions.toml, lo resolvemos aquí automáticamente
+
           if grep -q '<<<<<<<' gradle/libs.versions.toml; then
-            # Elimina líneas de Firebase y Google Services (dependencias y plugins)
             awk '!/firebase-bom/ && !/firebase-analytics/ && !/firebase-crashlytics/ && !/google-services/ {print}' gradle/libs.versions.toml | \
               awk '
                 BEGIN{conf=0}
@@ -41,107 +41,91 @@ jobs:
             git add gradle/libs.versions.toml
             git cherry-pick --continue
           fi
-
-      # 🧹 LIMPIEZA POST-CHERRY-PICK (remueve telemetría/Firebase/residuos del cherry-pick)
       - name: Remove telemetry module and references
-        run: |
+        run: >
           cd mihon
-          # 1. Borra el módulo telemetry completamente si existe
+
           rm -rf telemetry
 
-          # 2. LIMPIA settings.gradle.kts del include de telemetry
           sed -i '/include(":telemetry")/d' settings.gradle.kts || true
 
-          # 3. LIMPIA build.gradle.kts (raíz) de plugins de Firebase
           sed -i '/firebase.crashlytics/d' build.gradle.kts || true
+
           sed -i '/google.services/d' build.gradle.kts || true
 
-          # 4. LIMPIA buildSrc/src/main/kotlin/mihon/buildlogic/BuildConfig.kt de includeTelemetry
           sed -i '/includeTelemetry/d' buildSrc/src/main/kotlin/mihon/buildlogic/BuildConfig.kt || true
 
-          # 5. LIMPIA gradle/libs.versions.toml de dependencias y plugins de Firebase
           sed -i '/firebase-bom/d' gradle/libs.versions.toml || true
+
           sed -i '/firebase-analytics/d' gradle/libs.versions.toml || true
+
           sed -i '/firebase-crashlytics/d' gradle/libs.versions.toml || true
+
           sed -i '/google-services/d' gradle/libs.versions.toml || true
 
-          # 6. LIMPIA app/src/main/java/eu/kanade/tachiyomi/util/system/BuildConfig.kt de telemetryIncluded
           if [ -f app/src/main/java/eu/kanade/tachiyomi/util/system/BuildConfig.kt ]; then
             sed -i '/telemetryIncluded/d' app/src/main/java/eu/kanade/tachiyomi/util/system/BuildConfig.kt
           fi
 
-          # 7. LIMPIA app/src/main/java/eu/kanade/tachiyomi/App.kt de referencias a TelemetryConfig
           if [ -f app/src/main/java/eu/kanade/tachiyomi/App.kt ]; then
             sed -i '/TelemetryConfig/d' app/src/main/java/eu/kanade/tachiyomi/App.kt
             sed -i '/analytics()/,/launchIn/d' app/src/main/java/eu/kanade/tachiyomi/App.kt
             sed -i '/crashlytics()/,/launchIn/d' app/src/main/java/eu/kanade/tachiyomi/App.kt
           fi
 
-          # 8. LIMPIA app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt
           if [ -f app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt ]; then
             sed -i '/telemetryIncluded/d' app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt
             sed -i '/Crashlytics\|Analytics\|crashlytics\|analytics/d' app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt
             sed -i '/HorizontalDivider/d' app/src/main/java/eu/kanade/presentation/more/onboarding/PermissionStep.kt
           fi
 
-          # 9. LIMPIA app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsSecurityScreen.kt
           if [ -f app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsSecurityScreen.kt ]; then
             sed -i '/telemetryIncluded/d' app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsSecurityScreen.kt
             sed -i '/getFirebaseGroup/d' app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsSecurityScreen.kt
-            # Opcional: elimina el propio método getFirebaseGroup si no lo hace el cherry-pick
             awk '!inBlock && /private fun getFirebaseGroup/ {inBlock=1} !inBlock {print} /}/ && inBlock {inBlock=0}' app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsSecurityScreen.kt > tmp && mv tmp app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsSecurityScreen.kt
           fi
 
-          # 10. LIMPIEZA general
           ./gradlew clean
-
-      # Configura JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      # Decodifica el keystore
       - name: Decode keystore into app dir
         run: |
           cd mihon
           echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > app/nube.jks
-
-      # Compila solo la APK 32 bits (armeabi-v7a)
-      - name: Build unsigned 32bits APK
+      - name: Build all release APKs
         run: |
           cd mihon
-          ./gradlew assembleArmeabiV7aRelease --stacktrace
-
-      # Busca y firma la APK
-      - name: Sign APK using apksigner
-        run: |
+          ./gradlew assembleRelease --stacktrace
+      - name: Sign armeabi-v7a APK
+        run: >
           cd mihon
-          APK_PATH=$(find app/build/outputs/apk/armeabi-v7a/release -name "*.apk" | head -n 1)
+
+          APK_PATH=app/build/outputs/apk/release/app-armeabi-v7a-release-unsigned.apk
+
           if [ ! -f "$APK_PATH" ]; then
             echo "No se encontró el APK unsigned armeabi-v7a release"
             exit 1
           fi
+
           echo "APK unsigned encontrado en: $APK_PATH"
+
           "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -n1)/apksigner" sign \
             --ks app/nube.jks \
             --ks-key-alias "${{ secrets.RELEASE_KEY_ALIAS }}" \
             --ks-pass pass:"${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
             --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \
-            --out app-release-signed.apk \
+            --out app/build/outputs/apk/release/mihon-armeabi-v7a-release-signed.apk \
             "$APK_PATH"
-
-      # Lista la APK firmada
       - name: List APKs (signed)
         run: |
-          cd mihon
-          ls -lh app-release-signed.apk
-
-      # Sube la APK firmada como artefacto
-      - name: Upload signed APK artifact
+          cd mihon/app/build/outputs/apk/release
+          ls -lh mihon-armeabi-v7a-release-signed.apk
+      - name: Upload signed armeabi-v7a APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mihon-32bits-apk
-          path: mihon/app-release-signed.apk
+          name: mihon-armeabi-v7a-apk
+          path: mihon/app/build/outputs/apk/release/mihon-armeabi-v7a-release-signed.apk
           if-no-files-found: error

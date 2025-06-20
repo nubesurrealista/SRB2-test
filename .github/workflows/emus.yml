@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["2600.emu", "C64.emu", "GBA.emu", "GBC.emu", "Lynx.emu", "MD.emu", "MSX.emu", "NEO.emu", "NES.emu", "NGP.emu", "PCE.emu", "Snes9x", "Snes9x-1.43-9", "Snes9x-1.43-15", "Swan.emu", "Saturn.emu"]
+        image: ["2600.emu", "C64.emu", "GBA.emu", "GBC.emu", "Lynx.emu", "MD.emu", "MSX.emu", "NEO.emu", "NES.emu", "NGP.emu", "PCE.emu", "Snes9x", "Swan.emu"]
       fail-fast: false
 
     steps:
@@ -60,16 +60,6 @@ jobs:
       - name: Build ${{ matrix.image }}
         run: |
           case "${{ matrix.image }}" in
-            Snes9x-1.43-9)
-              cd Snes9x/1.43
-              make -f android-release-9.mk android-apk V=1 -j$(nproc)
-              cp target/android-release-9/build/outputs/apk/release/Snes9xEX-release.apk "../../EX-Emulators/Snes9xEX-9-${COMMIT_PREFIX}-unsigned.apk"
-              ;;
-            Snes9x-1.43-15)
-              cd Snes9x/1.43
-              make -f android-release-15.mk android-apk V=1 -j$(nproc)
-              cp target/android-release-15/build/outputs/apk/release/Snes9xEX-release.apk "../../EX-Emulators/Snes9xEX-15-${COMMIT_PREFIX}-unsigned.apk"
-              ;;
             Snes9x)
               cd Snes9x
               make -f android-release.mk android-apk V=1 -j$(nproc)
@@ -100,34 +90,31 @@ jobs:
               "$APK"
           done
 
-      - name: Upload signed APK as artifact
+      - name: Upload artifact APK
         uses: actions/upload-artifact@v4
         with:
-          name: ex-emulator-${{ matrix.image }}-signed-apk
+          name: apk-${{ matrix.image }}
           path: EX-Emulators/*-signed.apk
           if-no-files-found: warn
 
-  release:
-    name: Release
+  unify:
+    name: Unify APKs
     runs-on: ubuntu-latest
     needs: build
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Download all signed APKs
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: EX-Emulators
+          path: all-apks
           merge-multiple: true
 
-      - name: Create/Update Release with APKs
-        uses: ncipollo/release-action@v1
+      - name: Zip all APKs
+        run: |
+          cd all-apks
+          zip ../ALL-EX-EMULATORS-SIGNED-APKS.zip *.apk
+
+      - name: Upload unified ZIP artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag: nightly
-          name: "Automated Nightly Build"
-          body: "APK builds for all EX Emulators (firmados automáticamente)."
-          artifacts: "EX-Emulators/*.apk"
-          allowUpdates: true
-          prerelease: true
+          name: all-signed-apks
+          path: ALL-EX-EMULATORS-SIGNED-APKS.zip

@@ -10,6 +10,7 @@ jobs:
     strategy:
       matrix:
         image: ["2600.emu", "C64.emu", "GBA.emu", "GBC.emu", "Lynx.emu", "MD.emu", "MSX.emu", "NEO.emu", "NES.emu", "NGP.emu", "PCE.emu", "Snes9x", "Snes9x-1.43-9", "Snes9x-1.43-15", "Swan.emu", "Saturn.emu"]
+      fail-fast: false
 
     steps:
       - name: Clone emu-ex-plus-alpha source
@@ -56,7 +57,6 @@ jobs:
           make -f $EMUFRAMEWORK_PATH/android-release.mk config -j$(nproc)
           make -f $EMUFRAMEWORK_PATH/android-release.mk install V=1 -j$(nproc)
 
-      # Matriz de builds (uno por emulador)
       - name: Build ${{ matrix.image }}
         run: |
           case "${{ matrix.image }}" in
@@ -78,7 +78,6 @@ jobs:
             *)
               cd "${{ matrix.image }}"
               make -f android-release.mk android-apk V=1 -j$(nproc)
-              # Formato: NombreEmu-release.apk (ej: GbaEmu-release.apk)
               APK_NAME="$(ls target/android-release/build/outputs/apk/release/*-release.apk | head -n1)"
               cp "$APK_NAME" "../EX-Emulators/$(basename "$APK_NAME" .apk)-${COMMIT_PREFIX}-unsigned.apk"
               ;;
@@ -99,12 +98,36 @@ jobs:
               --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \
               --out "$OUT_APK" \
               "$APK"
-            echo "Firmado: $OUT_APK"
           done
 
-      - name: Upload all signed APKs
+      - name: Upload signed APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ex-emulators-signed-apks
+          name: ex-emulator-${{ matrix.image }}-signed-apk
           path: EX-Emulators/*-signed.apk
-          if-no-files-found: error
+          if-no-files-found: warn
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download all signed APKs
+        uses: actions/download-artifact@v4
+        with:
+          path: EX-Emulators
+          merge-multiple: true
+
+      - name: Create/Update Release with APKs
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          name: "Automated Nightly Build"
+          body: "APK builds for all EX Emulators (firmados automáticamente)."
+          artifacts: "EX-Emulators/*.apk"
+          allowUpdates: true
+          prerelease: true

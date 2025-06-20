@@ -1,5 +1,5 @@
 ---
-name: Build & Sign LogFox APK
+name: Build & Sign LogFox APK (external signing)
 on:
   workflow_dispatch: null
 jobs:
@@ -20,96 +20,37 @@ jobs:
         run: >
           echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d >
           LogFox/app/nube.jks
-      - name: Create release signing properties in app dir
-        run: >
-          echo "storeFile=nube.jks" > LogFox/app/release-signing.properties
-
-          echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> LogFox/app/release-signing.properties
-
-          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> LogFox/app/release-signing.properties
-
-          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> LogFox/app/release-signing.properties
-      - name: Ensure Gradle Wrapper is executable
-        run: chmod +x ./LogFox/gradlew
-      - name: Inject signing config for Kotlin DSL if needed
-        run: >
-          set -e
-
-          cd LogFox/app
-
-
-          # 1. Asegura que el import está al inicio del build.gradle.kts
-
-          if ! grep -q '^import java.util.Properties' build.gradle.kts; then
-            sed -i '1iimport java.util.Properties' build.gradle.kts
-            echo "Import de Properties agregado."
-          else
-            echo "Import de Properties ya presente."
-          fi
-
-
-          # 2. Inyecta signingConfigs si no existe
-
-          if ! grep -q 'signingConfigs' build.gradle.kts; then
-            echo "No signingConfigs found, inyectando bloque..."
-            awk '
-              /android[[:space:]]*{/ && !x {
-                print
-                print "    signingConfigs {"
-                print "        create(\"release\") {"
-                print "            val props = Properties().apply {"
-                print "                val file = rootProject.file(\"app/release-signing.properties\")"
-                print "                if (file.exists()) {"
-                print "                    file.inputStream().use { load(it) }"
-                print "                }"
-                print "            }"
-                print "            storeFile = file(props[\"storeFile\"].toString())"
-                print "            storePassword = props[\"storePassword\"].toString()"
-                print "            keyAlias = props[\"keyAlias\"].toString()"
-                print "            keyPassword = props[\"keyPassword\"].toString()"
-                print "        }"
-                print "    }"
-                x=1
-                next
-              }
-              { print }
-            ' build.gradle.kts > build.gradle.kts.tmp && mv build.gradle.kts.tmp build.gradle.kts
-          else
-            echo "signingConfigs ya presente, omitiendo inyección."
-          fi
-
-
-          # 3. Inyecta referencia en buildTypes.release si falta
-
-          if ! grep -q 'signingConfig = signingConfigs.getByName("release")' build.gradle.kts; then
-            echo "Inyectando referencia signingConfig en buildTypes.release..."
-            awk '
-              /buildTypes[[:space:]]*{/ && !x {
-                print
-                x=1
-              }
-              /getByName\(\"release\"\)[[:space:]]*{/ && !y {
-                print
-                print "            signingConfig = signingConfigs.getByName(\"release\")"
-                y=1
-                next
-              }
-              { print }
-            ' build.gradle.kts > build.gradle.kts.tmp && mv build.gradle.kts.tmp build.gradle.kts
-          else
-            echo "buildTypes.release ya usa signingConfig, omitiendo."
-          fi
-      - name: Build release APK (with stacktrace)
+      - name: Build unsigned release APK
         run: cd LogFox && ./gradlew assembleRelease --stacktrace
-      - name: List APKs
+      - name: List APKs (unsigned)
         run: find LogFox/app -type f -name "*.apk"
-      - name: Collect APKs
-        run: |
-          mkdir -p apk-out
-          find LogFox/app -type f -name "*.apk" -exec cp {} apk-out/ \;
-      - name: Upload APK artifact
+      - name: Sign APK using apksigner
+        run: >
+          # Busca el unsigned APK release
+
+          APK_PATH=$(find LogFox/app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
+
+          if [ ! -f "$APK_PATH" ]; then
+            echo "No se encontró el APK unsigned release"
+            exit 1
+          fi
+
+          echo "APK unsigned encontrado en: $APK_PATH"
+
+          # Firma el APK
+
+          "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -n1)/apksigner" sign \
+            --ks LogFox/app/nube.jks \
+            --ks-key-alias "${{ secrets.RELEASE_KEY_ALIAS }}" \
+            --ks-pass pass:"${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \
+            --out app-release-signed.apk \
+            "$APK_PATH"
+      - name: List APKs (signed)
+        run: ls -lh app-release-signed.apk
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: logfox-release-apk
-          path: apk-out/*.apk
-          if-no-files-found: warn
+          path: app-release-signed.apk
+          if-no-files-found: error

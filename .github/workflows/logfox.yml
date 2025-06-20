@@ -30,7 +30,7 @@ jobs:
           EOF
       - name: Ensure Gradle Wrapper is executable
         run: chmod +x ./LogFox/gradlew
-      - name: Inject signing config if missing
+      - name: Inject signing config if missing (non-null assertion)
         run: >
           FILE="LogFox/app/build.gradle.kts"
 
@@ -58,10 +58,10 @@ jobs:
                 print "    }"
                 print "    signingConfigs {"
                 print "        create(\"release\") {"
-                print "            storeFile = file(keystoreProperties[\"storeFile\"]?.toString())"
-                print "            storePassword = keystoreProperties[\"storePassword\"]?.toString()"
-                print "            keyAlias = keystoreProperties[\"keyAlias\"]?.toString()"
-                print "            keyPassword = keystoreProperties[\"keyPassword\"]?.toString()"
+                print "            storeFile = file(keystoreProperties[\"storeFile\"]?.toString()!!)"
+                print "            storePassword = keystoreProperties[\"storePassword\"]?.toString()!!"
+                print "            keyAlias = keystoreProperties[\"keyAlias\"]?.toString()!!"
+                print "            keyPassword = keystoreProperties[\"keyPassword\"]?.toString()!!"
                 print "        }"
                 print "    }"
                 next
@@ -82,12 +82,21 @@ jobs:
               { print }
             ' "$FILE" > tmp && mv tmp "$FILE"
           fi
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: oracle
+          cache: gradle
       - name: Build APK
         run: |
           cd LogFox
           ./gradlew assembleRelease --stacktrace --no-daemon
-      - name: Upload APK
+      - name: Listar APKs generados
+        run: find LogFox -type f -name "*.apk"
+      - name: Subir cualquier APK generado
         uses: actions/upload-artifact@v4
         with:
-          name: logfox-release-apk
-          path: LogFox/app/build/outputs/apk/release/app-release.apk
+          name: logfox-apks
+          path: |
+            LogFox/**/*.apk

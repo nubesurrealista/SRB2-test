@@ -75,14 +75,14 @@ jobs:
 
       - name: Decode keystore for signing
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nube.jks
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nube.p12
 
       - name: Sign APK
         run: |
           for APK in EX-Emulators/*-unsigned.apk; do
             OUT_APK="${APK%-unsigned.apk}-signed.apk"
             "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -n1)/apksigner" sign \
-              --ks nube.jks \
+              --ks nube.p12 \
               --ks-key-alias "${{ secrets.RELEASE_KEY_ALIAS }}" \
               --ks-pass pass:"${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
               --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \

@@ -18,10 +18,10 @@ jobs:
           java-version: "17"
       - name: Decode keystore into app dir
         run: >
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > KISS/app/nube.jks
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > KISS/app/nube.p12
       - name: Create release signing properties in app dir
         run: >
-          echo "storeFile=nube.jks" > KISS/app/release-signing.properties
+          echo "storeFile=nube.p12" > KISS/app/release-signing.properties
 
           echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> KISS/app/release-signing.properties
 

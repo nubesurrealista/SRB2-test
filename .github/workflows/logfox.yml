@@ -19,7 +19,7 @@ jobs:
       - name: Decode keystore into app dir
         run: >
           echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d >
-          LogFox/app/nube.jks
+          LogFox/app/nube.p12
       - name: Build unsigned release APK
         run: cd LogFox && ./gradlew assembleRelease --stacktrace
       - name: List APKs (unsigned)
@@ -40,7 +40,7 @@ jobs:
           # Firma el APK
 
           "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -n1)/apksigner" sign \
-            --ks LogFox/app/nube.jks \
+            --ks LogFox/app/nube.p12 \
             --ks-key-alias "${{ secrets.RELEASE_KEY_ALIAS }}" \
             --ks-pass pass:"${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
             --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \

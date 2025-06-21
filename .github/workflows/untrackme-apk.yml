@@ -18,11 +18,11 @@ jobs:
 
       - name: Decode keystore into app dir
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nitterizeme/app/nube.jks
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > nitterizeme/app/nube.p12
 
       - name: Create release signing properties in app dir
         run: |
-          echo "storeFile=nube.jks" > nitterizeme/app/release-signing.properties
+          echo "storeFile=nube.p12" > nitterizeme/app/release-signing.properties
           echo "storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> nitterizeme/app/release-signing.properties
           echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> nitterizeme/app/release-signing.properties
           echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> nitterizeme/app/release-signing.properties

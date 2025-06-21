@@ -94,7 +94,7 @@ jobs:
       - name: Decode keystore into app dir
         run: |
           cd mihon
-          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > app/nube.jks
+          echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > app/nube.p12
       - name: Build all release APKs
         run: |
           cd mihon
@@ -113,7 +113,7 @@ jobs:
           echo "APK unsigned encontrado en: $APK_PATH"
 
           "$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -n1)/apksigner" sign \
-            --ks app/nube.jks \
+            --ks app/nube.p12 \
             --ks-key-alias "${{ secrets.RELEASE_KEY_ALIAS }}" \
             --ks-pass pass:"${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
             --key-pass pass:"${{ secrets.RELEASE_KEY_PASSWORD }}" \

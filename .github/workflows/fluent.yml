@@ -1,0 +1,47 @@
+name: Build and Package Fluent Reader AppImage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone Fluent Reader repository
+        run: git clone --depth 1 https://github.com/yang991178/fluent-reader.git fluent-reader
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: fluent-reader
+        run: npm install
+
+      - name: Compile TypeScript and dependencies
+        working-directory: fluent-reader
+        run: npm run build
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Build signed AppImage
+        working-directory: fluent-reader
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.GPG_PASSPHRASE }}
+          CSC_LINK: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: npx electron-builder --linux AppImage
+
+      - name: List all AppImage files in workspace
+        run: find $GITHUB_WORKSPACE -name '*.AppImage' -print
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FluentReader-AppImage
+          path: '**/*.AppImage'

@@ -24,33 +24,28 @@ jobs:
         working-directory: fluent-reader
         run: npm run build
 
-      # Instala yq para manipular YAML de forma segura
-      - name: Install yq
-        run: sudo apt-get update && sudo apt-get install -y yq
-
-      # Modifica electron-builder.yml para habilitar la firma de AppImage
-      - name: Enable AppImage signing in electron-builder.yml
+      - name: Build AppImage (unsigned)
         working-directory: fluent-reader
-        run: yq -i '.linux.sign = true' electron-builder.yml
-
-      - name: Import GPG key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-      - name: Build signed AppImage
-        working-directory: fluent-reader
-        env:
-          CSC_KEY_PASSWORD: ${{ secrets.GPG_PASSPHRASE }}
-          CSC_LINK: ${{ secrets.GPG_PRIVATE_KEY }}
         run: npx electron-builder --linux AppImage --publish never
 
       - name: List all AppImage files in workspace
         run: find $GITHUB_WORKSPACE -name '*.AppImage' -print
 
-      - name: Upload AppImage artifact
+      # Importa la clave y firma SOLO en este paso
+      - name: Sign AppImage externally with GPG
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          APPIMAGE=$(find . -name '*.AppImage' | head -n 1)
+          gpg --batch --yes --detach-sign --armor "$APPIMAGE"
+          # Opcional: elimina la clave tras firmar para reducir exposición
+          gpg --batch --yes --delete-secret-keys
+
+      - name: Upload AppImage and signature
         uses: actions/upload-artifact@v4
         with:
           name: FluentReader-AppImage
-          path: '**/*.AppImage'
+          path: |
+            **/*.AppImage
+            **/*.AppImage.asc

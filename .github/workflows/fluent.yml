@@ -24,12 +24,14 @@ jobs:
         working-directory: fluent-reader
         run: npm run build
 
-      # Nuevo paso: habilitar firma en electron-builder.yml
+      # Instala yq para manipular YAML de forma segura
+      - name: Install yq
+        run: sudo apt-get update && sudo apt-get install -y yq
+
+      # Modifica electron-builder.yml para habilitar la firma de AppImage
       - name: Enable AppImage signing in electron-builder.yml
         working-directory: fluent-reader
-        run: |
-          yq -i '.linux.sign = true' electron-builder.yml || \
-          sed -i '/^linux:/a\  sign: true' electron-builder.yml
+        run: yq -i '.linux.sign = true' electron-builder.yml
 
       - name: Import GPG key
         env:

@@ -24,6 +24,13 @@ jobs:
         working-directory: fluent-reader
         run: npm run build
 
+      # Nuevo paso: habilitar firma en electron-builder.yml
+      - name: Enable AppImage signing in electron-builder.yml
+        working-directory: fluent-reader
+        run: |
+          yq -i '.linux.sign = true' electron-builder.yml || \
+          sed -i '/^linux:/a\  sign: true' electron-builder.yml
+
       - name: Import GPG key
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}

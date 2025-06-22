@@ -31,15 +31,14 @@ jobs:
       - name: List all AppImage files in workspace
         run: find $GITHUB_WORKSPACE -name '*.AppImage' -print
 
-      # Importa la clave y firma SOLO en este paso
       - name: Sign AppImage externally with GPG
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           APPIMAGE=$(find . -name '*.AppImage' | head -n 1)
-          gpg --batch --yes --detach-sign --armor "$APPIMAGE"
-          # Opcional: elimina la clave tras firmar para reducir exposición
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$APPIMAGE"
           gpg --batch --yes --delete-secret-keys
 
       - name: Upload AppImage and signature

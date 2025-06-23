@@ -1,12 +1,10 @@
+---
 name: Build and Upload Apostrophe
-
 on:
-  workflow_dispatch:
-
+  workflow_dispatch: null
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Instalar dependencias del sistema
         run: |
@@ -15,14 +13,44 @@ jobs:
             meson ninja-build \
             pandoc \
             libgtk-4-dev libglib2.0-dev \
-            libwebkit2gtk-4.0-dev \
             python3 python3-pip \
             python3-regex python3-setuptools python3-levenshtein \
             python3-enchant python3-gi python3-cairo python3-pypandoc \
             gir1.2-gtksource-5 libgtksourceview-5-dev \
             fonts-firacode \
             texlive texlive-latex-extra \
-            appstream zip unzip wget
+            appstream zip unzip wget \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Instalar WebKitGTK desde fuente (requerido para Ubuntu 22.04+)
+        run: |
+          # Instalar dependencias de compilación
+          sudo apt install -y cmake gperf libicu-dev libsystemd-dev \
+               libjpeg-dev libpng-dev libgeoclue-2-dev libgstreamer-plugins-base1.0-dev \
+               liblcms2-dev libenchant-2-dev libsecret-1-dev libharfbuzz-dev \
+               libxslt1-dev libhyphen-dev libwoff-dev libopenjp2-7-dev \
+               libgstreamer1.0-dev libegl1-mesa-dev libwayland-dev libxkbcommon-dev \
+               libxt-dev libxml2-dev libsqlite3-dev libnotify-dev
+          
+          # Descargar y compilar WebKitGTK
+          git clone https://github.com/WebKit/WebKit.git
+          cd WebKit
+          mkdir build
+          cd build
+          cmake -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPORT=GTK \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DUSE_GTK4=ON \
+            -DENABLE_JIT=OFF \
+            -DENABLE_INTROSPECTION=OFF \
+            -DENABLE_MINIBROWSER=OFF \
+            -DUSE_WPE_RENDERER=OFF \
+            -DUSE_SOUP2=OFF \
+            ..
+          ninja
+          sudo ninja install
+          cd ../..
 
       - name: Clonar el repositorio de Apostrophe
         run: |

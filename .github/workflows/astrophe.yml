@@ -1,0 +1,52 @@
+name: Build and Upload Apostrophe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            meson ninja-build \
+            pandoc \
+            libgtk-4-dev libglib2.0-dev \
+            libwebkit2gtk-4.0-dev \
+            python3 python3-pip \
+            python3-regex python3-setuptools python3-levenshtein \
+            python3-enchant python3-gi python3-cairo python3-pypandoc \
+            gir1.2-gtksource-5 libgtksourceview-5-dev \
+            fonts-firacode \
+            texlive texlive-latex-extra \
+            appstream zip unzip wget
+
+      - name: Clonar el repositorio de Apostrophe
+        run: |
+          git clone https://gitlab.gnome.org/World/apostrophe.git
+          cd apostrophe
+          wget https://github.com/hakimel/reveal.js/archive/refs/heads/master.zip
+          unzip master.zip
+          sudo mkdir -p /usr/share/apostrophe/libs/
+          sudo mv reveal.js-master /usr/share/apostrophe/libs/reveal.js
+
+      - name: Compilar Apostrophe
+        run: |
+          cd apostrophe
+          meson builddir --prefix=/opt/apostrophe -Dprofile=development
+          ninja -C builddir
+          DESTDIR="$PWD/install" ninja -C builddir install
+
+      - name: Empaquetar artefacto
+        run: |
+          cd apostrophe/install
+          tar -czf apostrophe.tar.gz opt
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: apostrophe-build
+          path: apostrophe/install/apostrophe.tar.gz

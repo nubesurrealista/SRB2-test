@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Install dependencies
-        run: |
+        run: >
           sudo apt-get update
-          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
-          
+
+          sudo apt-get install -y debhelper dh-python python3-all python3-setuptools python3-poetry-core git dpkg-sig gnupg2
       - name: Clone latest code
         run: |
           git clone --depth 1 https://github.com/z411/trackma.git trackma-source
@@ -24,82 +24,89 @@ jobs:
           VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           cd ..
-          tar -czf trackma_${VERSION}.orig.tar.gz trackma-source
-          
+          mv trackma-source trackma-${VERSION}
+          tar -czf trackma_${VERSION}.orig.tar.gz trackma-${VERSION}
+          mv trackma-${VERSION} trackma-source
       - name: Configure debian directory
-        run: |
+        run: >
           cd trackma-source
+
           mkdir -p debian
-          
+
+          mkdir -p debian/source
+
+          echo "3.0 (quilt)" > debian/source/format
+
+
           echo "Source: trackma" > debian/control
+
           echo "Section: python" >> debian/control
+
           echo "Priority: optional" >> debian/control
+
           echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
-          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
+
+          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-poetry-core, git" >> debian/control
+
           echo "Standards-Version: 4.5.0" >> debian/control
+
           echo "" >> debian/control
+
           echo "Package: trackma" >> debian/control
+
           echo "Architecture: all" >> debian/control
+
           echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
+
           echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
 
+
           echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
+
           echo "" >> debian/changelog
+
           echo "  * Latest commit from main branch" >> debian/changelog
+
           echo "" >> debian/changelog
+
           echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
 
+
           echo "#!/usr/bin/make -f" > debian/rules
+
           echo "%:" >> debian/rules
-          echo "	dh \$@ --with python3" >> debian/rules
+
+          echo "	dh \$@ --with python3 --buildsystem=pybuild" >> debian/rules
+
           chmod +x debian/rules
-          
       - name: Build Debian package
         run: |
           cd trackma-source
           dpkg-buildpackage -us -uc
           echo "Build completed. Searching for generated files..."
-          
-      - name: Find and verify .deb package
-        run: |
-          echo "Searching for .deb files in build directory..."
-          find .. -name "*.deb" -type f
-          
-          DEB_FILE=$(find .. -name "trackma_${VERSION}-1_all.deb" -type f -print -quit)
-          if [ -z "$DEB_FILE" ]; then
-            echo "::error::No .deb file found!"
-            echo "All generated files:"
-            find .. -type f
-            exit 1
-          fi
-          
-          echo "Found .deb package at: $DEB_FILE"
-          echo "DEB_FILE=$DEB_FILE" >> $GITHUB_ENV
-          ls -la "$DEB_FILE"
-          
+      - name: Find and prepare artifacts
+        run: >
+          mkdir -p deb-artifacts
+
+          find .. -maxdepth 1 -type f \( -name "*.deb" -o -name "*.deb.asc" \) -exec mv {} deb-artifacts/ \;
+
+          echo "DEB_PATH=deb-artifacts/$(ls deb-artifacts/*.deb | head -n1)" >> $GITHUB_ENV
+
+          ls -la deb-artifacts/
       - name: Sign Debian package
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
+        run: >
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          
-          if [ ! -f "$DEB_FILE" ]; then
-            echo "::error::Debian package not found at expected path: $DEB_FILE"
-            exit 1
-          fi
-          
-          echo "Signing package: $DEB_FILE"
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$DEB_FILE"
+
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$DEB_PATH"
+
           gpg --batch --yes --delete-secret-keys
-          
-          echo "Signature created:"
-          ls -la "${DEB_FILE}.asc"
-          
+
+          ls -la "${DEB_PATH}.asc"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: trackma-deb
-          path: |
-            ${{ env.DEB_FILE }}
-            ${{ env.DEB_FILE }}.asc
+          path: deb-artifacts/*

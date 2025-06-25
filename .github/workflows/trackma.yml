@@ -1,5 +1,5 @@
 ---
-name: Build Trackma Standalone Executable
+name: Build Trackma Standalone (Full Bundle)
 on:
   push:
     branches:
@@ -16,64 +16,68 @@ jobs:
             python3-pip \
             python3-venv \
             git \
-            patchelf  # Necesario para PyInstaller en Linux
+            patchelf \
+            libcairo2-dev \  # Para GTK
+            libgirepository1.0-dev  # Para PyGObject
           python3 -m pip install --upgrade pip wheel
-      - name: Clone and version detection
+
+      - name: Clone and setup
         run: |
-          git clone --depth 1 https://github.com/z411/trackma.git trackma-source
+          git clone --recursive https://github.com/z411/trackma.git trackma-source
           cd trackma-source
           VERSION=$(grep -m1 version pyproject.toml | awk -F\" '{print $2}')
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          echo "Project version: ${VERSION}"
-      - name: Install Python dependencies
+          
+          # Instalar con TODOS los extras (GTK, trackers, etc.)
+          python3 -m pip install -e .[ui,trackers]
+
+      - name: Build executable (GTK version)
         run: |
           cd trackma-source
-          python3 -m pip install \
-            pyinstaller \
-            -e .  # Instala trackma y sus dependencias
-      - name: Build executable
+          
+          # Construir el entry point GTK
+          pyinstaller \
+            --onefile \
+            --name trackma-gtk \
+            --distpath ../dist \
+            --add-data="$(python3 -c 'import trackma; import os; print(os.path.dirname(trackma.__file__))'/data:data \
+            --hidden-import="pkg_resources" \
+            --hidden-import="jeepney" \  # Para MPRIS
+            --hidden-import="PIL" \  # Para imágenes
+            --clean \
+            $(python3 -c "from trackma.ui.gtk import TrackmaGTK; import inspect; print(inspect.getfile(TrackmaGTK))")
+
+          # Verificación
+          if [ ! -f "../dist/trackma-gtk" ]; then
+            echo "::error::GTK build failed!"
+            exit 1
+          fi
+
+      - name: Build CLI version
         run: |
           cd trackma-source
           pyinstaller \
             --onefile \
             --name trackma \
             --distpath ../dist \
-            --add-data="trackma/data:data" \
             --hidden-import="pkg_resources" \
             --clean \
-            trackma/__main__.py
+            $(python3 -c "import trackma.main; import inspect; print(inspect.getfile(trackma.main))")
 
-          # Verificar que el binario existe
-          if [ ! -f "../dist/trackma" ]; then
-            echo "::error::Build failed! Executable not found"
-            exit 1
-          fi
-      - name: Prepare release package
-        run: >
+      - name: Package release
+        run: |
           mkdir -p release
-
-          mv dist/trackma release/
-
-
-          # Crear archivo de versión
-
+          mv dist/* release/
+          
+          # Incluir librerías GTK
+          cp -r /usr/lib/x86_64-linux-gnu/girepository-1.0 release/ || true
+          
           echo "${VERSION}" > release/VERSION
+          tar -czvf "trackma-${VERSION}-full-linux.tar.gz" -C release .
+          echo "ARTIFACT_PATH=trackma-${VERSION}-full-linux.tar.gz" >> $GITHUB_ENV
 
-
-          # Empaquetar todo
-
-          tar -czvf "trackma-${VERSION}-linux-amd64.tar.gz" -C release .
-
-          echo "ARTIFACT_PATH=trackma-${VERSION}-linux-amd64.tar.gz" >> $GITHUB_ENV
-
-
-          # Mostrar estructura
-
-          echo "Package contents:"
-
-          tar -tzvf "${ARTIFACT_PATH}"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trackma-standalone
+          name: trackma-standalone-full
           path: ${{ env.ARTIFACT_PATH }}

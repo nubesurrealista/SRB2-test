@@ -1,10 +1,7 @@
 ---
-name: Build Trackma Debian Package (Latest Commit)
+name: Build Trackma Standalone Executable
 on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
   workflow_dispatch: null
@@ -12,101 +9,71 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Install dependencies
-        run: >
+      - name: Install system dependencies
+        run: |
           sudo apt-get update
-
-          sudo apt-get install -y debhelper dh-python python3-all python3-setuptools python3-poetry-core git dpkg-sig gnupg2
-      - name: Clone latest code
+          sudo apt-get install -y \
+            python3-pip \
+            python3-venv \
+            git \
+            patchelf  # Necesario para PyInstaller en Linux
+          python3 -m pip install --upgrade pip wheel
+      - name: Clone and version detection
         run: |
           git clone --depth 1 https://github.com/z411/trackma.git trackma-source
           cd trackma-source
-          VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          cd ..
-          mv trackma-source trackma-${VERSION}
-          tar -czf trackma_${VERSION}.orig.tar.gz trackma-${VERSION}
-          mv trackma-${VERSION} trackma-source
-      - name: Configure debian directory
-        run: >
-          cd trackma-source
-
-          mkdir -p debian
-
-          mkdir -p debian/source
-
-          echo "3.0 (quilt)" > debian/source/format
-
-
-          echo "Source: trackma" > debian/control
-
-          echo "Section: python" >> debian/control
-
-          echo "Priority: optional" >> debian/control
-
-          echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
-
-          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-poetry-core, git" >> debian/control
-
-          echo "Standards-Version: 4.5.0" >> debian/control
-
-          echo "" >> debian/control
-
-          echo "Package: trackma" >> debian/control
-
-          echo "Architecture: all" >> debian/control
-
-          echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
-
-          echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
-
-
-          echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
-
-          echo "" >> debian/changelog
-
-          echo "  * Latest commit from main branch" >> debian/changelog
-
-          echo "" >> debian/changelog
-
-          echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
-
-
-          echo "#!/usr/bin/make -f" > debian/rules
-
-          echo "%:" >> debian/rules
-
-          echo "	dh \$@ --with python3 --buildsystem=pybuild" >> debian/rules
-
-          chmod +x debian/rules
-      - name: Build Debian package
+          VERSION=$(grep -m1 version pyproject.toml | awk -F\" '{print $2}')
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "Project version: ${VERSION}"
+      - name: Install Python dependencies
         run: |
           cd trackma-source
-          dpkg-buildpackage -us -uc
-          echo "Build completed. Searching for generated files..."
-      - name: Find and prepare artifacts
+          python3 -m pip install \
+            pyinstaller \
+            -e .  # Instala trackma y sus dependencias
+      - name: Build executable
+        run: |
+          cd trackma-source
+          pyinstaller \
+            --onefile \
+            --name trackma \
+            --distpath ../dist \
+            --add-data="trackma/data:data" \
+            --hidden-import="pkg_resources" \
+            --clean \
+            trackma/__main__.py
+
+          # Verificar que el binario existe
+          if [ ! -f "../dist/trackma" ]; then
+            echo "::error::Build failed! Executable not found"
+            exit 1
+          fi
+      - name: Prepare release package
         run: >
-          mkdir -p deb-artifacts
+          mkdir -p release
 
-          find .. -maxdepth 1 -type f \( -name "*.deb" -o -name "*.deb.asc" \) -exec mv {} deb-artifacts/ \;
+          mv dist/trackma release/
 
-          echo "DEB_PATH=deb-artifacts/$(ls deb-artifacts/*.deb | head -n1)" >> $GITHUB_ENV
 
-          ls -la deb-artifacts/
-      - name: Sign Debian package
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: >
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # Crear archivo de versión
 
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$DEB_PATH"
+          echo "${VERSION}" > release/VERSION
 
-          gpg --batch --yes --delete-secret-keys
 
-          ls -la "${DEB_PATH}.asc"
+          # Empaquetar todo
+
+          tar -czvf "trackma-${VERSION}-linux-amd64.tar.gz" -C release .
+
+          echo "ARTIFACT_PATH=trackma-${VERSION}-linux-amd64.tar.gz" >> $GITHUB_ENV
+
+
+          # Mostrar estructura
+
+          echo "Package contents:"
+
+          tar -tzvf "${ARTIFACT_PATH}"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trackma-deb
-          path: deb-artifacts/*
+          name: trackma-standalone
+          path: ${{ env.ARTIFACT_PATH }}

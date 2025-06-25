@@ -33,7 +33,7 @@ jobs:
 
           DATA_PATH=$(python3 -c "import trackma; import os; print(os.path.join(os.path.dirname(trackma.__file__), 'data'))")
 
-          ENTRY_POINT=$(python3 -c "from trackma.ui.gtk import TrackmaGTK; import inspect; print(inspect.getfile(TrackmaGTK))")
+          ENTRY_POINT=$(which trackma-gtk)
 
           pyinstaller --onefile --name trackma-gtk --distpath ../dist --add-data="${DATA_PATH}:data" --hidden-import="pkg_resources" --hidden-import="gi" --hidden-import="cairo" --hidden-import="jeepney" --clean "${ENTRY_POINT}"
 
@@ -51,12 +51,15 @@ jobs:
           mv dist/trackma-gtk release/
 
           cat > release/check-deps.sh <<EOF
-            #!/bin/bash
-            if ! pkg-config --exists gtk+-3.0 cairo; then
-              echo "Error: Missing required libraries. Install with:"
-              echo "  Debian/Ubuntu: sudo apt install libgtk-3-0 libcairo2"
-              exit 1
-            fi
+
+          #!/bin/bash
+
+          if ! pkg-config --exists gtk+-3.0 cairo; then
+            echo "Error: Missing required libraries. Install with:"
+            echo "  Debian/Ubuntu: sudo apt install libgtk-3-0 libcairo2"
+            exit 1
+          fi
+
           EOF
 
           chmod +x release/check-deps.sh

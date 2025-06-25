@@ -17,17 +17,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2 pybuild-plugin-pyproject python3-pip
 
-    - name: Clone Trackma repository
+    - name: Clone and prepare repository
       run: |
-        git clone https://github.com/z411/trackma.git
-        cd trackma
+        git clone https://github.com/z411/trackma.git trackma-0.9
+        cd trackma-0.9
         git checkout v0.9
-        mv trackma trackma-0.9
         cd ..
 
     - name: Configure debian directory
-      working-directory: trackma-0.9
       run: |
+        cd trackma-0.9
         mkdir -p debian
         mkdir -p debian/source
         echo "3.0 (quilt)" > debian/source/format
@@ -46,7 +45,7 @@ jobs:
         echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
         echo " Trackma es un programa ligero, simple pero rico en funciones para sistemas basados en Unix, que permite obtener, actualizar y usar datos de listas personales alojadas en varios sitios web de seguimiento de medios." >> debian/control
 
-        # Archivo rules simplificado
+        # Archivo rules
         echo "#!/usr/bin/make -f" > debian/rules
         echo "" >> debian/rules
         echo "%:" >> debian/rules
@@ -82,8 +81,8 @@ jobs:
         echo "usr/share/pixmaps/trackma.png data/icon.png" >> debian/trackma.install
 
     - name: Install Python dependencies
-      working-directory: trackma-0.9
       run: |
+        cd trackma-0.9
         pip3 install build
 
     - name: Import GPG key
@@ -98,8 +97,8 @@ jobs:
         echo "KEYID=$KEYID" >> $GITHUB_ENV
 
     - name: Build Debian package
-      working-directory: trackma-0.9
       run: |
+        cd trackma-0.9
         dpkg-buildpackage -us -uc
 
     - name: Sign Debian package
@@ -107,13 +106,13 @@ jobs:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         KEYID: ${{ env.KEYID }}
       run: |
-        echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --output ../trackma_0.9-1_all.deb.sig --detach-sig ../trackma_0.9-1_all.deb
-        dpkg-sig --sign builder -k "$KEYID" ../trackma_0.9-1_all.deb
+        echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --output trackma_0.9-1_all.deb.sig --detach-sig trackma_0.9-1_all.deb
+        dpkg-sig --sign builder -k "$KEYID" trackma_0.9-1_all.deb
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: trackma-deb
         path: |
-          ../trackma_0.9-1_all.deb
-          ../trackma_0.9-1_all.deb.sig
+          trackma_0.9-1_all.deb
+          trackma_0.9-1_all.deb.sig

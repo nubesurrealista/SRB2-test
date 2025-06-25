@@ -46,37 +46,76 @@ jobs:
           KEYID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5}')
 
           echo "KEYID=$KEYID" >> $GITHUB_ENV
-
-          echo "Imported key:"
-
-          gpg --list-secret-keys --keyid-format LONG
       - name: Configure debian directory
-        run: |
+        run: >
           cd trackma-source
+
           mkdir -p debian
-          # [Resto de la configuración permanece igual...]
+
+          # Archivo control
+
+          echo "Source: trackma" > debian/control
+
+          echo "Section: python" >> debian/control
+
+          echo "Priority: optional" >> debian/control
+
+          echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
+
+          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
+
+          echo "Standards-Version: 4.5.0" >> debian/control
+
+          echo "" >> debian/control
+
+          echo "Package: python3-trackma" >> debian/control
+
+          echo "Architecture: all" >> debian/control
+
+          echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
+
+          echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
+
+
+          # Archivo changelog (corrección clave aquí)
+
+          echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
+
+          echo "" >> debian/changelog
+
+          echo "  * Latest build from main branch" >> debian/changelog
+
+          echo "" >> debian/changelog
+
+          echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
+
+
+          # Archivo rules
+
+          echo "#!/usr/bin/make -f" > debian/rules
+
+          echo "%:" >> debian/rules
+
+          echo "	dh \$@ --with python3" >> debian/rules
+
+          chmod +x debian/rules
       - name: Build Debian package
         run: |
           cd trackma-source
           dpkg-buildpackage -us -uc
-          echo "Build artifacts:"
-          find .. -name "*.deb" -exec echo {} \;
+          ls ../*.deb
       - name: Sign Debian package
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           KEYID: ${{ env.KEYID }}
         run: >
-          DEB_FILE=$(find .. -name "*.deb" -print -quit)
+          DEB_FILE=$(ls ../*_all.deb)
 
           echo "Signing package: $DEB_FILE"
 
           echo "$GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output "${DEB_FILE}.sig" --detach-sig "$DEB_FILE"
 
           dpkg-sig --sign builder -k "$KEYID" "$DEB_FILE"
-
-          echo "Verifying signature:"
-
-          gpg --verify "${DEB_FILE}.sig" "$DEB_FILE"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

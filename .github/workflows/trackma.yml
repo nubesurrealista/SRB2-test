@@ -13,17 +13,9 @@ jobs:
         run: >
           sudo apt-get update
 
-          sudo apt-get install -y
-            python3-pip
-            python3-venv
-            git
-            patchelf
-            libcairo2-dev
-            libgirepository1.0-dev
-            python3-dev
+          sudo apt-get install -y python3-pip python3-venv git patchelf libcairo2-dev libgirepository1.0-dev python3-dev
 
           python3 -m pip install --upgrade pip wheel
-
       - name: Clone and setup
         run: >
           git clone --recursive https://github.com/z411/trackma.git trackma-source
@@ -35,26 +27,15 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
           python3 -m pip install -e .[gtk,trackers]
-
       - name: Build executable
         run: >
           cd trackma-source
 
-          DATA_PATH=$(python3 -c "import trackma; import os; print(os.path.join(os.path.dirname(trackma.__file__), 'data')")
+          DATA_PATH=$(python3 -c "import trackma; import os; print(os.path.join(os.path.dirname(trackma.__file__), 'data'))")
 
           ENTRY_POINT=$(python3 -c "from trackma.ui.gtk import TrackmaGTK; import inspect; print(inspect.getfile(TrackmaGTK))")
 
-          pyinstaller
-            --onefile
-            --name trackma-gtk
-            --distpath ../dist
-            --add-data="${DATA_PATH}:data"
-            --hidden-import="pkg_resources"
-            --hidden-import="gi"
-            --hidden-import="cairo"
-            --hidden-import="jeepney"
-            --clean
-            "${ENTRY_POINT}"
+          pyinstaller --onefile --name trackma-gtk --distpath ../dist --add-data="${DATA_PATH}:data" --hidden-import="pkg_resources" --hidden-import="gi" --hidden-import="cairo" --hidden-import="jeepney" --clean "${ENTRY_POINT}"
 
           if [ ! -f "../dist/trackma-gtk" ]; then
             echo "::error::Build failed!"
@@ -63,20 +44,19 @@ jobs:
           fi
 
           ls -lh "../dist/trackma-gtk"
-
       - name: Package release
         run: >
           mkdir -p release
 
           mv dist/trackma-gtk release/
 
-          cat <<'EOF' > release/check-deps.sh
-          #!/bin/bash
-          if ! pkg-config --exists gtk+-3.0 cairo; then
-            echo "Error: Missing required libraries. Install with:"
-            echo "  Debian/Ubuntu: sudo apt install libgtk-3-0 libcairo2"
-            exit 1
-          fi
+          cat > release/check-deps.sh <<EOF
+            #!/bin/bash
+            if ! pkg-config --exists gtk+-3.0 cairo; then
+              echo "Error: Missing required libraries. Install with:"
+              echo "  Debian/Ubuntu: sudo apt install libgtk-3-0 libcairo2"
+              exit 1
+            fi
           EOF
 
           chmod +x release/check-deps.sh
@@ -84,7 +64,6 @@ jobs:
           tar -czvf "trackma-${VERSION}-gtk-light.tar.gz" -C release .
 
           echo "ARTIFACT_PATH=trackma-${VERSION}-gtk-light.tar.gz" >> $GITHUB_ENV
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

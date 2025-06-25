@@ -1,5 +1,5 @@
 ---
-name: Build Trackma Debian Package
+name: Build Trackma Debian Package (Latest)
 on:
   push:
     branches:
@@ -16,26 +16,25 @@ jobs:
         run: >
           sudo apt-get update
 
-          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2 pybuild-plugin-pyproject python3-pip
-      - name: Clone and prepare repository
-        run: |
-          git clone https://github.com/z411/trackma.git trackma-0.9
-          cd trackma-0.9
-          git checkout v0.9
+          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
+      - name: Clone latest code
+        run: >
+          git clone https://github.com/z411/trackma.git trackma-latest
+
+          cd trackma-latest
+
+          VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2 || echo "0.9")
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
           cd ..
-          tar -czf trackma_0.9.orig.tar.gz trackma-0.9
+
+          tar -czf trackma_${VERSION}.orig.tar.gz trackma-latest
       - name: Configure debian directory
         run: >
-          cd trackma-0.9
+          cd trackma-latest
 
           mkdir -p debian
-
-          mkdir -p debian/source
-
-          echo "1.0" > debian/source/format
-
-
-          # Archivo control
 
           echo "Source: trackma" > debian/control
 
@@ -45,7 +44,7 @@ jobs:
 
           echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
 
-          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git, pybuild-plugin-pyproject, python3-setuptools" >> debian/control
+          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
 
           echo "Standards-Version: 4.5.0" >> debian/control
 
@@ -59,110 +58,46 @@ jobs:
 
           echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
 
-          echo " Trackma es un programa ligero, simple pero rico en funciones para sistemas basados en Unix, que permite obtener, actualizar y usar datos de listas personales alojadas en varios sitios web de seguimiento de medios." >> debian/control
 
-
-          # Archivo rules
-
-          echo "#!/usr/bin/make -f" > debian/rules
-
-          echo "" >> debian/rules
-
-          echo "%:" >> debian/rules
-
-          echo "	dh \$@ --with python3" >> debian/rules
-
-          chmod +x debian/rules
-
-
-          # Archivo changelog
-
-          echo "trackma (0.9-1) unstable; urgency=medium" > debian/changelog
+          echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
 
           echo "" >> debian/changelog
 
-          echo "  * Lanzamiento inicial (clonado desde upstream 0.9)" >> debian/changelog
+          echo "  * Latest build from main branch" >> debian/changelog
 
           echo "" >> debian/changelog
 
           echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
 
 
-          # Archivo copyright
+          echo "#!/usr/bin/make -f" > debian/rules
 
-          echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > debian/copyright
+          echo "%:" >> debian/rules
 
-          echo "Upstream-Name: Trackma" >> debian/copyright
+          echo "	dh \$@ --with python3" >> debian/rules
 
-          echo "Upstream-Contact: z411 <z411@users.noreply.github.com>" >> debian/copyright
-
-          echo "Source: https://github.com/z411/trackma" >> debian/copyright
-
-          echo "" >> debian/copyright
-
-          echo "Files: *" >> debian/copyright
-
-          echo "Copyright: 2019-2025 z411" >> debian/copyright
-
-          echo "License: MIT" >> debian/copyright
-
-          echo "" >> debian/copyright
-
-          echo "License: MIT" >> debian/copyright
-
-          echo " Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:" >> debian/copyright
-
-          echo "" >> debian/copyright
-
-          echo " The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software." >> debian/copyright
-
-          echo "" >> debian/copyright
-
-          echo " THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE." >> debian/copyright
-
-
-          # Archivo install
-
-          echo "usr/share/applications/trackma-gtk.desktop data/trackma-gtk.desktop" > debian/trackma.install
-
-          echo "usr/share/pixmaps/trackma.png data/icon.png" >> debian/trackma.install
-      - name: Install Python dependencies
-        run: |
-          cd trackma-0.9
-          pip3 install build
-      - name: Import GPG key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: >
-          mkdir -p ~/.gnupg
-
-          chmod 700 ~/.gnupg
-
-          echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
-
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-          KEYID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5}')
-
-          echo "KEYID=$KEYID" >> $GITHUB_ENV
+          chmod +x debian/rules
       - name: Build Debian package
         run: |
-          cd trackma-0.9
+          cd trackma-latest
           dpkg-buildpackage -us -uc
+          ls ../*.deb
       - name: Sign Debian package
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           KEYID: ${{ env.KEYID }}
         run: >
-          echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback
-          --passphrase-fd 0 --output ../trackma_0.9-1_all.deb.sig --detach-sig
-          ../trackma_0.9-1_all.deb
+          DEB_FILE=$(ls ../*_all.deb)
 
-          dpkg-sig --sign builder -k "$KEYID" ../trackma_0.9-1_all.deb
+          echo "Found .deb file: $DEB_FILE"
+
+          echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --output "${DEB_FILE}.sig" --detach-sig "$DEB_FILE"
+
+          dpkg-sig --sign builder -k "$KEYID" "$DEB_FILE"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: trackma-deb
           path: |
-            ../trackma_0.9-1_all.deb
-            ../trackma_0.9-1_all.deb.sig
+            ../*_all.deb
+            ../*_all.deb.sig

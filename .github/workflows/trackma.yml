@@ -35,7 +35,7 @@ jobs:
 
           echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
 
-          echo "Build-Depends: debhelper (>= 9), dh-python, python3-all, python3-poetry-core, git" >> debian/control
+          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
 
           echo "Standards-Version: 4.5.0" >> debian/control
 
@@ -58,7 +58,7 @@ jobs:
 
           echo "%:" >> debian/rules
 
-          echo "	dh \$@ --with python3" >> debian/rules
+          echo "	dh \$@ --with python3 --buildsystem=pybuild" >> debian/rules
 
           chmod +x debian/rules
 
@@ -71,7 +71,7 @@ jobs:
 
           echo "" >> debian/changelog
 
-          echo " -- Nube <nubesurrealista@proton.me>  Tue, 24 Jun 2025 21:03:00 +0000" >> debian/changelog
+          echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
 
 
           echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > debian/copyright

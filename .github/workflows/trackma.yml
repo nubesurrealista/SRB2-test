@@ -1,5 +1,5 @@
 ---
-name: Build Trackma Debian Package (Latest)
+name: Build Trackma Debian Package (Latest Commit)
 on:
   push:
     branches:
@@ -18,25 +18,12 @@ jobs:
 
           sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
       - name: Clone latest code
-        run: >
-          git clone https://github.com/z411/trackma.git trackma-source
-
+        run: |
+          git clone --depth 1 https://github.com/z411/trackma.git trackma-source
           cd trackma-source
-
-          # Obtener última tag o usar main
-
-          LATEST_TAG=$(git describe --tags --abbrev=0 || echo "main")
-
-          git checkout $LATEST_TAG
-
-          # Extraer versión o usar tag sin 'v'
-
-          VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2 || echo "${LATEST_TAG#v}")
-
+          VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-
           cd ..
-
           tar -czf trackma_${VERSION}.orig.tar.gz trackma-source
       - name: Configure debian directory
         run: >
@@ -58,7 +45,7 @@ jobs:
 
           echo "" >> debian/control
 
-          echo "Package: trackma" >> debian/control  # Cambiado a trackma
+          echo "Package: trackma" >> debian/control
 
           echo "Architecture: all" >> debian/control
 
@@ -71,7 +58,7 @@ jobs:
 
           echo "" >> debian/changelog
 
-          echo "  * Build from ${LATEST_TAG}" >> debian/changelog
+          echo "  * Latest commit from main branch" >> debian/changelog
 
           echo "" >> debian/changelog
 
@@ -89,8 +76,8 @@ jobs:
         run: |
           cd trackma-source
           dpkg-buildpackage -us -uc
-          echo "Paquete generado:"
-          ls -la ../*.deb
+          echo "Generated packages:"
+          ls -la $GITHUB_WORKSPACE/*.deb
       - name: Sign Debian package
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -98,17 +85,21 @@ jobs:
         run: >
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
-          DEB_FILE=$(find .. -name 'trackma_*.deb' | head -n 1)
+          DEB_FILE=$(ls $GITHUB_WORKSPACE/trackma_*.deb | head -n 1)
 
-          echo "Firmando: $DEB_FILE"
+          echo "Signing: $DEB_FILE"
 
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$DEB_FILE"
 
           gpg --batch --yes --delete-secret-keys
+
+          echo "Signature created:"
+
+          ls -la $DEB_FILE.asc
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: trackma-deb
           path: |
-            ../trackma_*.deb
-            ../trackma_*.deb.asc
+            $GITHUB_WORKSPACE/trackma_*.deb
+            $GITHUB_WORKSPACE/trackma_*.deb.asc

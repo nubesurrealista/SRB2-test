@@ -1,106 +1,146 @@
-```yaml
+---
 name: Build Trackma Debian Package
-
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
+    branches:
+      - main
+  workflow_dispatch: null
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig
+      - name: Install dependencies
+        run: >
+          sudo apt-get update
 
-    - name: Clone Trackma repository
-      run: |
-        git clone https://github.com/z411/trackma.git
-        cd trackma
-        git checkout v0.9
+          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig
+      - name: Clone Trackma repository
+        run: |
+          git clone https://github.com/z411/trackma.git
+          cd trackma
+          git checkout v0.9
+      - name: Configure debian directory
+        working-directory: trackma
+        run: >
+          mkdir -p debian
 
-    - name: Configure debian directory
-      working-directory: trackma
-      run: |
-        mkdir -p debian
-        cat > debian/control << 'EOF'
-Source: trackma
-Section: python
-Priority: optional
-Maintainer: Nube <nubesurrealista@proton.me>
-Build-Depends: debhelper (>= 9), dh-python, python3-all, python3-poetry-core, git
-Standards-Version: 4.5.0
 
-Package: python3-trackma
-Architecture: all
-Depends: ${python3:Depends}, python3-gi, python3-cairo, python3-pil
-Description: Gestor de listas multi-sitio para sistemas Unix
- Trackma es un programa ligero, simple pero rico en funciones para sistemas basados en Unix, que permite obtener, actualizar y usar datos de listas personales alojadas en varios sitios web de seguimiento de medios.
-EOF
-        cat > debian/rules << 'EOF'
-#!/usr/bin/make -f
+          # Archivo control
 
-%:
-	dh $@ --with python3
-EOF
-        chmod +x debian/rules
-        cat > debian/changelog << 'EOF'
-trackma (0.9-1) unstable; urgency=medium
+          echo "Source: trackma" > debian/control
 
-  * Lanzamiento inicial (clonado desde upstream 0.9)
+          echo "Section: python" >> debian/control
 
- -- Tu Nombre <tu.email@ejemplo.com>  Tue, 24 Jun 2025 21:03:00 +0000
-EOF
-        cat > debian/copyright << 'EOF'
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: Trackma
-Upstream-Contact: z411 <z411@users.noreply.github.com>
-Source: https://github.com/z411/trackma
+          echo "Priority: optional" >> debian/control
 
-Files: *
-Copyright: 2019-2025 z411
-License: MIT
+          echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
 
-License: MIT
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+          echo "Build-Depends: debhelper (>= 9), dh-python, python3-all, python3-poetry-core, git" >> debian/control
 
- The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+          echo "Standards-Version: 4.5.0" >> debian/control
 
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-EOF
-        cat > debian/trackma.install << 'EOF'
-usr/share/applications/trackma-gtk.desktop data/trackma-gtk.desktop
-usr/share/pixmaps/trackma.png data/icon.png
-EOF
+          echo "" >> debian/control
 
-    - name: Import GPG key
-      env:
-        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      run: |
-        echo "$GPG_PRIVATE_KEY" | gpg --import
-        KEYID=$(gpg --list-secret-keys --with-colons | grep sec | cut -d: -f10)
-        echo "KEYID=$KEYID" >> $GITHUB_ENV
+          echo "Package: python3-trackma" >> debian/control
 
-    - name: Build Debian package
-      working-directory: trackma
-      run: |
-        dpkg-buildpackage -us -uc
+          echo "Architecture: all" >> debian/control
 
-    - name: Sign Debian package
-      env:
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        KEYID: ${{ env.KEYID }}
-      run: |
-        echo "$GPG_PASSPHRASE" | dpkg-sig --sign builder --key-id "$KEYID" --passphrase-fd 0 trackma_0.9-1_all.deb
+          echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: trackma-deb
-        path: trackma_0.9-1_all.deb
-```
+          echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
+
+          echo " Trackma es un programa ligero, simple pero rico en funciones para sistemas basados en Unix, que permite obtener, actualizar y usar datos de listas personales alojadas en varios sitios web de seguimiento de medios." >> debian/control
+
+
+          # Archivo rules
+
+          echo "#!/usr/bin/make -f" > debian/rules
+
+          echo "" >> debian/rules
+
+          echo "%:" >> debian/rules
+
+          echo "	dh \$@ --with python3" >> debian/rules
+
+          chmod +x debian/rules
+
+
+          # Archivo changelog
+
+          echo "trackma (0.9-1) unstable; urgency=medium" > debian/changelog
+
+          echo "" >> debian/changelog
+
+          echo "  * Lanzamiento inicial (clonado desde upstream 0.9)" >> debian/changelog
+
+          echo "" >> debian/changelog
+
+          echo " -- Nube <nubesurrealista@proton.me>  Tue, 24 Jun 2025 21:03:00 +0000" >> debian/changelog
+
+
+          # Archivo copyright
+
+          echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > debian/copyright
+
+          echo "Upstream-Name: Trackma" >> debian/copyright
+
+          echo "Upstream-Contact: z411 <z411@users.noreply.github.com>" >> debian/copyright
+
+          echo "Source: https://github.com/z411/trackma" >> debian/copyright
+
+          echo "" >> debian/copyright
+
+          echo "Files: *" >> debian/copyright
+
+          echo "Copyright: 2019-2025 z411" >> debian/copyright
+
+          echo "License: MIT" >> debian/copyright
+
+          echo "" >> debian/copyright
+
+          echo "License: MIT" >> debian/copyright
+
+          echo " Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:" >> debian/copyright
+
+          echo "" >> debian/copyright
+
+          echo " The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software." >> debian/copyright
+
+          echo "" >> debian/copyright
+
+          echo " THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE." >> debian/copyright
+
+
+          # Archivo install
+
+          echo "usr/share/applications/trackma-gtk.desktop data/trackma-gtk.desktop" > debian/trackma.install
+
+          echo "usr/share/pixmaps/trackma.png data/icon.png" >> debian/trackma.install
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: >
+          echo "$GPG_PRIVATE_KEY" | gpg --import
+
+          KEYID=$(gpg --list-secret-keys --with-colons | grep sec | cut -d: -f10)
+
+          echo "KEYID=$KEYID" >> $GITHUB_ENV
+      - name: Build Debian package
+        working-directory: trackma
+        run: |
+          dpkg-buildpackage -us -uc
+      - name: Sign Debian package
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          KEYID: ${{ env.KEYID }}
+        run: >
+          echo "$GPG_PASSPHRASE" | dpkg-sig --sign builder --key-id "$KEYID"
+          --passphrase-fd 0 ../trackma_0.9-1_all.deb
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trackma-deb
+          path: ../trackma_0.9-1_all.deb

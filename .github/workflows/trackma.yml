@@ -1,103 +1,90 @@
----
 name: Build Trackma Debian Package (Latest)
+
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch: null
+    branches: [main]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
-      - name: Install dependencies
-        run: >
-          sudo apt-get update
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
 
-          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
-      - name: Clone latest code
-        run: >
-          git clone https://github.com/z411/trackma.git trackma-latest
+    - name: Clone latest code
+      run: |
+        git clone https://github.com/z411/trackma.git trackma-source
+        cd trackma-source
+        VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2 || echo "0.9")
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        cd ..
+        tar -czf trackma_${VERSION}.orig.tar.gz trackma-source
 
-          cd trackma-latest
+    - name: Configure debian directory
+      run: |
+        cd trackma-source
+        mkdir -p debian
+        echo "Source: trackma" > debian/control
+        echo "Section: python" >> debian/control
+        echo "Priority: optional" >> debian/control
+        echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
+        echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
+        echo "Standards-Version: 4.5.0" >> debian/control
+        echo "" >> debian/control
+        echo "Package: python3-trackma" >> debian/control
+        echo "Architecture: all" >> debian/control
+        echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
+        echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
 
-          VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2 || echo "0.9")
+        echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
+        echo "" >> debian/changelog
+        echo "  * Latest build from main branch" >> debian/changelog
+        echo "" >> debian/changelog
+        echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
 
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "#!/usr/bin/make -f" > debian/rules
+        echo "%:" >> debian/rules
+        echo "	dh \$@ --with python3" >> debian/rules
+        chmod +x debian/rules
 
-          cd ..
+    - name: Build Debian package
+      run: |
+        cd trackma-source
+        dpkg-buildpackage -us -uc
+        echo "Build completed, searching for .deb files..."
+        find $GITHUB_WORKSPACE -name "*.deb" -exec echo "Found package: {}" \;
 
-          tar -czf trackma_${VERSION}.orig.tar.gz trackma-latest
-      - name: Configure debian directory
-        run: >
-          cd trackma-latest
+    - name: Sign Debian package
+      env:
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        KEYID: ${{ env.KEYID }}
+      run: |
+        echo "Searching for .deb file in workspace..."
+        DEB_FILE=$(find $GITHUB_WORKSPACE -name "*.deb" -print -quit)
+        
+        if [ -z "$DEB_FILE" ]; then
+          echo "::error::No .deb package found in workspace!"
+          echo "Directory contents:"
+          find $GITHUB_WORKSPACE -type f -exec echo "{}" \;
+          exit 1
+        fi
 
-          mkdir -p debian
+        echo "Found package at: $DEB_FILE"
+        echo "Generating signature..."
+        echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --output "${DEB_FILE}.sig" --detach-sig "$DEB_FILE"
+        dpkg-sig --sign builder -k "$KEYID" "$DEB_FILE"
+        echo "Package signed successfully"
 
-          echo "Source: trackma" > debian/control
-
-          echo "Section: python" >> debian/control
-
-          echo "Priority: optional" >> debian/control
-
-          echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
-
-          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
-
-          echo "Standards-Version: 4.5.0" >> debian/control
-
-          echo "" >> debian/control
-
-          echo "Package: python3-trackma" >> debian/control
-
-          echo "Architecture: all" >> debian/control
-
-          echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
-
-          echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
-
-
-          echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
-
-          echo "" >> debian/changelog
-
-          echo "  * Latest build from main branch" >> debian/changelog
-
-          echo "" >> debian/changelog
-
-          echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
-
-
-          echo "#!/usr/bin/make -f" > debian/rules
-
-          echo "%:" >> debian/rules
-
-          echo "	dh \$@ --with python3" >> debian/rules
-
-          chmod +x debian/rules
-      - name: Build Debian package
-        run: |
-          cd trackma-latest
-          dpkg-buildpackage -us -uc
-          ls ../*.deb
-      - name: Sign Debian package
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          KEYID: ${{ env.KEYID }}
-        run: >
-          DEB_FILE=$(ls ../*_all.deb)
-
-          echo "Found .deb file: $DEB_FILE"
-
-          echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 --output "${DEB_FILE}.sig" --detach-sig "$DEB_FILE"
-
-          dpkg-sig --sign builder -k "$KEYID" "$DEB_FILE"
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: trackma-deb
-          path: |
-            ../*_all.deb
-            ../*_all.deb.sig
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: trackma-deb
+        path: |
+          ${{ github.workspace }}/*.deb
+          ${{ github.workspace }}/*.deb.sig

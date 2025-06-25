@@ -52,8 +52,6 @@ jobs:
 
           mkdir -p debian
 
-          # Archivo control
-
           echo "Source: trackma" > debian/control
 
           echo "Section: python" >> debian/control
@@ -77,8 +75,6 @@ jobs:
           echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
 
 
-          # Archivo changelog (corrección clave aquí)
-
           echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
 
           echo "" >> debian/changelog
@@ -89,8 +85,6 @@ jobs:
 
           echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
 
-
-          # Archivo rules
 
           echo "#!/usr/bin/make -f" > debian/rules
 
@@ -103,19 +97,40 @@ jobs:
         run: |
           cd trackma-source
           dpkg-buildpackage -us -uc
-          ls ../*.deb
+          echo "Verifying generated .deb file:"
+          ls -la ../*.deb
+          echo "Package content:"
+          dpkg -c ../*.deb || true
       - name: Sign Debian package
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           KEYID: ${{ env.KEYID }}
         run: >
-          DEB_FILE=$(ls ../*_all.deb)
+          cd trackma-source
 
-          echo "Signing package: $DEB_FILE"
+          DEB_FILE=$(find .. -maxdepth 1 -name "*.deb" -print -quit)
+
+
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No .deb file found in parent directory!"
+            echo "Current directory: $(pwd)"
+            echo "Directory contents:"
+            ls -la ..
+            exit 1
+          fi
+
+
+          echo "Found package at: $DEB_FILE"
+
+          echo "Signing with key $KEYID..."
 
           echo "$GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output "${DEB_FILE}.sig" --detach-sig "$DEB_FILE"
 
           dpkg-sig --sign builder -k "$KEYID" "$DEB_FILE"
+
+          echo "Verifying signature:"
+
+          gpg --verify "${DEB_FILE}.sig" "$DEB_FILE"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

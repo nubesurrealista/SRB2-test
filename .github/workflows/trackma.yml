@@ -10,13 +10,13 @@ on:
   workflow_dispatch: null
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
         run: >
           sudo apt-get update
 
-          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig
+          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
       - name: Clone Trackma repository
         run: |
           git clone https://github.com/z411/trackma.git
@@ -26,9 +26,6 @@ jobs:
         working-directory: trackma
         run: >
           mkdir -p debian
-
-
-          # Archivo control
 
           echo "Source: trackma" > debian/control
 
@@ -55,8 +52,6 @@ jobs:
           echo " Trackma es un programa ligero, simple pero rico en funciones para sistemas basados en Unix, que permite obtener, actualizar y usar datos de listas personales alojadas en varios sitios web de seguimiento de medios." >> debian/control
 
 
-          # Archivo rules
-
           echo "#!/usr/bin/make -f" > debian/rules
 
           echo "" >> debian/rules
@@ -68,8 +63,6 @@ jobs:
           chmod +x debian/rules
 
 
-          # Archivo changelog
-
           echo "trackma (0.9-1) unstable; urgency=medium" > debian/changelog
 
           echo "" >> debian/changelog
@@ -80,8 +73,6 @@ jobs:
 
           echo " -- Nube <nubesurrealista@proton.me>  Tue, 24 Jun 2025 21:03:00 +0000" >> debian/changelog
 
-
-          # Archivo copyright
 
           echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > debian/copyright
 
@@ -114,8 +105,6 @@ jobs:
           echo " THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE." >> debian/copyright
 
 
-          # Archivo install
-
           echo "usr/share/applications/trackma-gtk.desktop data/trackma-gtk.desktop" > debian/trackma.install
 
           echo "usr/share/pixmaps/trackma.png data/icon.png" >> debian/trackma.install
@@ -123,9 +112,15 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: >
-          echo "$GPG_PRIVATE_KEY" | gpg --import
+          mkdir -p ~/.gnupg
 
-          KEYID=$(gpg --list-secret-keys --with-colons | grep sec | cut -d: -f10)
+          chmod 700 ~/.gnupg
+
+          echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
+
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+          KEYID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5}')
 
           echo "KEYID=$KEYID" >> $GITHUB_ENV
       - name: Build Debian package
@@ -137,10 +132,15 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           KEYID: ${{ env.KEYID }}
         run: >
-          echo "$GPG_PASSPHRASE" | dpkg-sig --sign builder --key-id "$KEYID"
-          --passphrase-fd 0 ../trackma_0.9-1_all.deb
+          echo "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback
+          --passphrase-fd 0 --output ../trackma_0.9-1_all.deb.sig --detach-sig
+          ../trackma_0.9-1_all.deb
+
+          dpkg-sig --sign builder -k "$KEYID" ../trackma_0.9-1_all.deb
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: trackma-deb
-          path: ../trackma_0.9-1_all.deb
+          path: |
+            ../trackma_0.9-1_all.deb
+            ../trackma_0.9-1_all.deb.sig

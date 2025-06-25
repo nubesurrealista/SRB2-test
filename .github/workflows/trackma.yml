@@ -17,67 +17,75 @@ jobs:
             python3-venv \
             git \
             patchelf \
-            libcairo2-dev \  # Para GTK
-            libgirepository1.0-dev  # Para PyGObject
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            gir1.2-gtk-3.0 \
+            python3-gi \
+            python3-gi-cairo \
+            python3-cairo  # Dependencias explícitas para GTK
           python3 -m pip install --upgrade pip wheel
-
       - name: Clone and setup
-        run: |
+        run: >
           git clone --recursive https://github.com/z411/trackma.git trackma-source
-          cd trackma-source
-          VERSION=$(grep -m1 version pyproject.toml | awk -F\" '{print $2}')
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          
-          # Instalar con TODOS los extras (GTK, trackers, etc.)
-          python3 -m pip install -e .[ui,trackers]
 
-      - name: Build executable (GTK version)
-        run: |
           cd trackma-source
-          
-          # Construir el entry point GTK
+
+          VERSION=$(grep -m1 version pyproject.toml | awk -F\" '{print $2}')
+
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+
+          # Instalar con extras GTK y trackers
+
+          python3 -m pip install -e .[gtk,trackers]
+      - name: Build GTK executable
+        run: >
+          cd trackma-source
+
+
+          # Construir con PyInstaller
+
           pyinstaller \
             --onefile \
             --name trackma-gtk \
             --distpath ../dist \
-            --add-data="$(python3 -c 'import trackma; import os; print(os.path.dirname(trackma.__file__))'/data:data \
+            --add-data="$(python3 -c 'import trackma; import os; print(os.path.join(os.path.dirname(trackma.__file__), "data")):data'" \
             --hidden-import="pkg_resources" \
-            --hidden-import="jeepney" \  # Para MPRIS
-            --hidden-import="PIL" \  # Para imágenes
+            --hidden-import="gi" \
+            --hidden-import="cairo" \
             --clean \
             $(python3 -c "from trackma.ui.gtk import TrackmaGTK; import inspect; print(inspect.getfile(TrackmaGTK))")
 
           # Verificación
+
           if [ ! -f "../dist/trackma-gtk" ]; then
             echo "::error::GTK build failed!"
+            ls -la ../dist/
             exit 1
           fi
-
-      - name: Build CLI version
-        run: |
-          cd trackma-source
-          pyinstaller \
-            --onefile \
-            --name trackma \
-            --distpath ../dist \
-            --hidden-import="pkg_resources" \
-            --clean \
-            $(python3 -c "import trackma.main; import inspect; print(inspect.getfile(trackma.main))")
-
       - name: Package release
-        run: |
+        run: >
           mkdir -p release
-          mv dist/* release/
-          
-          # Incluir librerías GTK
-          cp -r /usr/lib/x86_64-linux-gnu/girepository-1.0 release/ || true
-          
-          echo "${VERSION}" > release/VERSION
-          tar -czvf "trackma-${VERSION}-full-linux.tar.gz" -C release .
-          echo "ARTIFACT_PATH=trackma-${VERSION}-full-linux.tar.gz" >> $GITHUB_ENV
 
+          mv dist/trackma-gtk release/
+
+
+          # Incluir metadata
+
+          echo "${VERSION}" > release/VERSION
+
+          echo "Built: $(date)" > release/BUILD_INFO
+
+
+          tar -czvf "trackma-${VERSION}-gtk-linux.tar.gz" -C release .
+
+          echo "ARTIFACT_PATH=trackma-${VERSION}-gtk-linux.tar.gz" >> $GITHUB_ENV
+
+          sha256sum "${ARTIFACT_PATH}" > "${ARTIFACT_PATH}.sha256"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trackma-standalone-full
-          path: ${{ env.ARTIFACT_PATH }}
+          name: trackma-standalone-gtk
+          path: |
+            ${{ env.ARTIFACT_PATH }}
+            ${{ env.ARTIFACT_PATH }}.sha256

@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Install build dependencies
-        run: |
+        run: >
           sudo apt-get update
+
           sudo apt-get install -y
             python3-pip
             python3-venv
@@ -22,6 +23,7 @@ jobs:
             python3-dev
 
           python3 -m pip install --upgrade pip wheel
+
       - name: Clone and setup
         run: >
           git clone --recursive https://github.com/z411/trackma.git trackma-source
@@ -33,6 +35,7 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
           python3 -m pip install -e .[gtk,trackers]
+
       - name: Build executable
         run: >
           cd trackma-source
@@ -60,23 +63,28 @@ jobs:
           fi
 
           ls -lh "../dist/trackma-gtk"
+
       - name: Package release
         run: >
           mkdir -p release
 
           mv dist/trackma-gtk release/
 
-          cat <<'EOF' > release/check-deps.sh #!/bin/bash if ! pkg-config --exists gtk+-3.0 cairo; then
+          cat <<'EOF' > release/check-deps.sh
+          #!/bin/bash
+          if ! pkg-config --exists gtk+-3.0 cairo; then
             echo "Error: Missing required libraries. Install with:"
             echo "  Debian/Ubuntu: sudo apt install libgtk-3-0 libcairo2"
             exit 1
-          fi EOF
+          fi
+          EOF
 
           chmod +x release/check-deps.sh
 
           tar -czvf "trackma-${VERSION}-gtk-light.tar.gz" -C release .
 
           echo "ARTIFACT_PATH=trackma-${VERSION}-gtk-light.tar.gz" >> $GITHUB_ENV
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

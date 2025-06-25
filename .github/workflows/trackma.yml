@@ -1,82 +1,109 @@
+---
 name: Build Trackma Debian Package (Latest Commit)
-
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
-  workflow_dispatch:
-
+    branches:
+      - main
+  workflow_dispatch: null
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
+      - name: Install dependencies
+        run: >
+          sudo apt-get update
 
-    - name: Clone latest code
-      run: |
-        git clone --depth 1 https://github.com/z411/trackma.git trackma-source
-        cd trackma-source
-        VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2)
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        cd ..
-        tar -czf trackma_${VERSION}.orig.tar.gz trackma-source
+          sudo apt-get install -y debhelper dh-python python3-all python3-poetry-core git dpkg-sig gnupg2
+      - name: Clone latest code
+        run: |
+          git clone --depth 1 https://github.com/z411/trackma.git trackma-source
+          cd trackma-source
+          VERSION=$(grep -m1 version pyproject.toml | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          cd ..
+          tar -czf trackma_${VERSION}.orig.tar.gz trackma-source
+      - name: Configure debian directory
+        run: >
+          cd trackma-source
 
-    - name: Configure debian directory
-      run: |
-        cd trackma-source
-        mkdir -p debian
-        echo "Source: trackma" > debian/control
-        echo "Section: python" >> debian/control
-        echo "Priority: optional" >> debian/control
-        echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
-        echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
-        echo "Standards-Version: 4.5.0" >> debian/control
-        echo "" >> debian/control
-        echo "Package: trackma" >> debian/control
-        echo "Architecture: all" >> debian/control
-        echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
-        echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
+          mkdir -p debian
 
-        echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
-        echo "" >> debian/changelog
-        echo "  * Latest commit from main branch" >> debian/changelog
-        echo "" >> debian/changelog
-        echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
+          echo "Source: trackma" > debian/control
 
-        echo "#!/usr/bin/make -f" > debian/rules
-        echo "%:" >> debian/rules
-        echo "	dh \$@ --with python3" >> debian/rules
-        chmod +x debian/rules
+          echo "Section: python" >> debian/control
 
-    - name: Build Debian package
-      run: |
-        cd trackma-source
-        dpkg-buildpackage -us -uc
-        echo "Generated files in parent directory:"
-        ls -la ../
+          echo "Priority: optional" >> debian/control
 
-    - name: Sign Debian package
-      env:
-        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      run: |
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-        DEB_FILE="../trackma_${VERSION}-1_all.deb"
-        echo "Signing: $DEB_FILE"
-        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$DEB_FILE"
-        gpg --batch --yes --delete-secret-keys
-        echo "Signature created:"
-        ls -la "${DEB_FILE}.asc"
+          echo "Maintainer: Nube <nubesurrealista@proton.me>" >> debian/control
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: trackma-deb
-        path: |
-          ../trackma_*.deb
-          ../trackma_*.deb.asc
+          echo "Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-poetry-core, git" >> debian/control
+
+          echo "Standards-Version: 4.5.0" >> debian/control
+
+          echo "" >> debian/control
+
+          echo "Package: trackma" >> debian/control
+
+          echo "Architecture: all" >> debian/control
+
+          echo "Depends: \${python3:Depends}, python3-gi, python3-cairo, python3-pil" >> debian/control
+
+          echo "Description: Gestor de listas multi-sitio para sistemas Unix" >> debian/control
+
+
+          echo "trackma (${VERSION}-1) unstable; urgency=medium" > debian/changelog
+
+          echo "" >> debian/changelog
+
+          echo "  * Latest commit from main branch" >> debian/changelog
+
+          echo "" >> debian/changelog
+
+          echo " -- Nube <nubesurrealista@proton.me>  $(date -R)" >> debian/changelog
+
+
+          echo "#!/usr/bin/make -f" > debian/rules
+
+          echo "%:" >> debian/rules
+
+          echo "	dh \$@ --with python3" >> debian/rules
+
+          chmod +x debian/rules
+      - name: Build Debian package
+        run: |
+          cd trackma-source
+          dpkg-buildpackage -us -uc
+          echo "Generated files in parent directory:"
+          ls -la ../
+      - name: List generated .deb files
+        run: |
+          echo "Listing .deb files in parent directory:"
+          ls -la ../*.deb
+      - name: Sign Debian package
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: >
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+          DEB_FILE="../trackma_${VERSION}-1_all.deb"
+
+          echo "Signing: $DEB_FILE"
+
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor "$DEB_FILE"
+
+          gpg --batch --yes --delete-secret-keys
+
+          echo "Signature created:"
+
+          ls -la "${DEB_FILE}.asc"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trackma-deb
+          path: |
+            ../trackma_*.deb
+            ../trackma_*.deb.asc

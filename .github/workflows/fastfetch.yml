@@ -1,0 +1,27 @@
+---
+name: Compilar Fastfetch y publicar binario
+on:
+  workflow_dispatch: null
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar fastfetch
+        run: git clone --depth=1 https://github.com/fastfetch-cli/fastfetch.git
+      - name: Instalar dependencias básicas
+        run: |
+          sudo apt update
+          sudo apt install -y cmake pkg-config gcc build-essential \
+            libxcb1-dev libx11-dev libdrm-dev libpci-dev libgl1-mesa-dev
+      - name: Configurar y compilar
+        working-directory: fastfetch
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build . --target fastfetch
+      - name: Subir artefacto binario
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastfetch-linux
+          path: fastfetch/build/fastfetch
